@@ -14,7 +14,7 @@ from database.models import Base
 config = context.config
 config.set_main_option(
     "sqlalchemy.url",
-    settings.DATABASE_URL.replace('+asyncpg', ''),
+    settings.db_url.replace('+asyncpg', ''),
 )
 
 # Interpret the config file for Python logging.
