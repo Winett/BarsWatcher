@@ -1,14 +1,13 @@
-import json
 from asyncio import sleep
 from typing import Optional, Callable, Awaitable
 
 from bs4 import BeautifulSoup
 from loguru import logger
-from sqlalchemy.util import await_only
 
 from watchers.base import BaseAuth
 from watchers.exceptions import LoginError
 from watchers.bars.barsmodel import DisciplineWatcher
+from settings import settings
 
 
 class WatcherKM(BaseAuth):
@@ -16,7 +15,11 @@ class WatcherKM(BaseAuth):
     summary_url = 'https://bars.mpei.ru/bars_web/ST_Study/Main/_PartialSummary'
     list_student_url = 'https://bars.mpei.ru/bars_web/ST/Student/ListStudent'
 
-    timeout = 60
+    if settings.DEBUG:
+        timeout = 5
+    else:
+        timeout = 60
+
 
     def __init__(self, username: str, password: str):
         super().__init__(username, password)
@@ -51,7 +54,6 @@ class WatcherKM(BaseAuth):
             async with session.post(self.login_url, data=data) as response:
                 pass
 
-            logger.debug(f"{self.__class__.__name__} Проверка авторизации: {session.cookie_jar.filter_cookies(self.login_url)}")
             if session.cookie_jar.filter_cookies(self.login_url).get('auth_bars'):
                 await self._save_session()
                 return True
@@ -105,6 +107,9 @@ class WatcherKM(BaseAuth):
 
         async with session:
             while self.watching:
+                if session.closed:
+                    logger.warning("-- Сессия закрылась, пеероткрываю --")
+                    session = await self.get_session()
                 try:
                     async with await session.get(self.summary_url, params={'studentID': self.student_id}, allow_redirects=False) as response:
                         content = await response.read()

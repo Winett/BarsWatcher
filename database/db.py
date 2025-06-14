@@ -2,7 +2,6 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from settings import settings
-from services.user import UserService
 
 from database.models import Base
 

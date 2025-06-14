@@ -1,11 +1,11 @@
-from asyncio import sleep, gather
+from asyncio import sleep
 import json
 from loguru import logger
-from typing import Optional, Callable, Awaitable
 
 from watchers.base import BaseAuth
 from watchers.exceptions import LoginError
-from watchers.osep.osepmodel import AttachmentData, Attachments
+from watchers.osep.osepmodel import AttachmentData
+from settings import settings
 
 class WatcherOsep(BaseAuth):
     mails_url = 'https://mail.mpei.ru/owa/sessiondata.ashx?appcacheclient=0'
@@ -14,7 +14,10 @@ class WatcherOsep(BaseAuth):
     attachments_url = "https://mail.mpei.ru/owa/service.svc?action=GetConversationItems"
     get_attachment_url = "https://mail.mpei.ru/owa/service.svc/s/GetFileAttachment"
 
-    timeout = 5
+    if settings.DEBUG:
+        timeout = 5
+    else:
+        timeout = 60
 
     def __init__(self, username: str, password: str):
         super().__init__(username, password)
@@ -28,7 +31,7 @@ class WatcherOsep(BaseAuth):
                 return True
             async with session.post(self.login_url, data={'curl': 'Z2FowaZ2F', 'flags': 0, 'forcedownlevel': 0, 'formdir': 2,
                                                     'username': self.username, 'password': self.password, 'isUtf8': 1,
-                                                    'trusted': 4}, allow_redirects=False):
+                                                    'trusted': 0}, allow_redirects=False):
                 pass
             if await self.check_auth(session):
                 logger.info(f"{self.__class__.__name__}-- Авторизация с помощью пароля({self.username}) --")
@@ -55,7 +58,7 @@ class WatcherOsep(BaseAuth):
                     session = await self.get_session()
                 try:
                     async with session.post(self.mails_url, allow_redirects=False) as response:
-
+                        # logger.debug(f"{self.__class__.__name__} Проверка авторизации: {session.cookie_jar.filter_cookies(self.mails_url)}")
                         if response.status == 401:
                             logger.warning("-- Сессия устарела, выполняем перелогин --")
                             await self.login()
@@ -63,7 +66,6 @@ class WatcherOsep(BaseAuth):
                             continue
 
                         try:
-                            # print(await response.text())
                             current_data = json.loads(await response.text())
                         except json.decoder.JSONDecodeError:
                             logger.error(f"{self.__class__.__name__} Ошибка декодирования JSON: {response.text[:200]}")

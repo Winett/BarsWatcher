@@ -1,4 +1,3 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
 
 
@@ -14,8 +13,6 @@ def get_start_keyboard():
 def input_bars_data_keyboard():
     keyboard = InlineKeyboardBuilder()
     keyboard.add(
-        # InlineKeyboardButton(text="Ввести логин", callback_data='bars_login'),
-        # InlineKeyboardButton(text="Ввести пароль", callback_data='bars_password')
         InlineKeyboardButton(text="Ввести данные для входа в БАРС", callback_data='bars_credentials'),
     )
     return keyboard.as_markup()

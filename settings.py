@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
-from sqlalchemy import alias
 
 
 def create_env_without_data():
