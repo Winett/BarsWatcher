@@ -28,7 +28,7 @@ logger.add(stderr, format="<white>{time:HH:mm:ss:Z}</white>"
                           " | <cyan>{line}</cyan>"
                           " - <magenta>{message}</magenta>")
 # logger.add(stderr)
-logger.add('log.log', rotation=1024*100) #каждые 10КБ
+logger.add('log.log', rotation=8*1024*1024*5) #каждые 10КБ
 (Path(__file__).parent / "sessions").mkdir(exist_ok=True, parents=True)
 BaseAuth.session_dir = Path(__file__).parent / "sessions"
 
