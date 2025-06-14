@@ -1,12 +1,10 @@
 from aiogram import Bot
-from aiogram.types import InputFile, InputMediaDocument, BufferedInputFile
-from io import BytesIO
+from aiogram.types import InputMediaDocument, BufferedInputFile
 
 from loguru import logger
 
 from watchers.bars.barsWatcher import WatcherKM
 from watchers.osep.osepWatcher import WatcherOsep
-from watchers.osep.osepmodel import AttachmentData
 import asyncio
 
 from watchers.exceptions import LoginError
@@ -144,10 +142,11 @@ class OsepNotificator(Notificator):
                     media_group.append(InputMediaDocument(media=input_file, filename=filename.name))
 
 
-                await self.bot.send_message(
+                a = await self.bot.send_message(
                     chat_id=target_id,
                     text=message
                 )
+                #TODO: Сделать "ответ" на сообщение с письмом файлам
                 for i in range(0, len(files), 10):
                     await self.bot.send_media_group(
                         chat_id=target_id,
@@ -159,61 +158,3 @@ class OsepNotificator(Notificator):
 
         except Exception as e:
             logger.error(f"Ошибка отправки сообщения: {e}")
-
-
-
-# class BarsNotificator(Notificator):
-#     _instances: dict[int, 'BarsNotificator'] = {}  # Хранит экземпляры по chat_id
-#
-#     def __init__(self, chat_id: int, username: str, password: str):
-#         self.chat_id = chat_id
-#         self.watcher = WatcherKM(username, password)
-#         self._instances[chat_id] = self  # Регистрируем экземпляр
-#
-#     async def notify(self, message: str, *, user_id: Optional[int] = None):
-#         if user_id:
-#             await self.bot.send_message(user_id, message)
-#             return
-#         await self.bot.send_message(self.chat_id, message)
-#
-#     async def start_watching(self) -> bool:
-#         """Запускает мониторинг изменений"""
-#         # logger.debug(f"Попытка авторизации в БАРС...")
-#         try:
-#             if not await self.watcher.login():
-#                 await self.notify("Ошибка авторизации в БАРС\n\nПроверьте логин и пароль и обновите их")
-#                 return False
-#         except LoginError as e:
-#             await self.notify(f"Ошибка авторизации в БАРС: {str(e)}\n\nПроверьте логин и пароль и обновите их")
-#             return False
-#         # logger.debug(f"Попытка получить student_id...")
-#         self.watcher.student_id = await self.watcher.get_student_id()
-#         # logger.debug(f"Попытка получить student_id... Успешно: {self.watcher.student_id is not None}")
-#         asyncio.create_task(self._watch_loop())
-#         # logger.debug(f"##Мониторинг запущен##")
-#         return True
-#
-#     async def _watch_loop(self):
-#         """Внутренний цикл мониторинга"""
-#         self.watcher.watching = True
-#         while self.watcher.watching:
-#             try:
-#                 await self.watcher.watch(callback=self.notify)
-#             except Exception as e:
-#                 await self.notify(f"Ошибка мониторинга: {e.__class__.__name__} {e.args} {str(e)}", user_id=settings.admin_id[0])
-#
-#                 # await self.notify(f"Ошибка мониторинга: {str(e)}")
-#                 await asyncio.sleep(5)
-#
-#     @classmethod
-#     def get_instance(cls, chat_id: int) -> Optional['BarsNotificator']:
-#         """Возвращает экземпляр по chat_id"""
-#         return cls._instances.get(chat_id)
-#
-#     @classmethod
-#     def stop_watching(cls, chat_id: int):
-#         """Останавливает мониторинг для пользователя"""
-#         if instance := cls._instances.get(chat_id):
-#             instance.watcher.stop()
-#             del cls._instances[chat_id]
-

@@ -1,10 +1,8 @@
-import json
 from asyncio import sleep
 from typing import Optional, Callable, Awaitable
 
 from bs4 import BeautifulSoup
 from loguru import logger
-from sqlalchemy.util import await_only
 
 from watchers.base import BaseAuth
 from watchers.exceptions import LoginError

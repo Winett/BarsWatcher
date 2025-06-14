@@ -1,7 +1,5 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import  AsyncSession
 
-from settings import settings
 from sqlalchemy import select, delete
 
 from database.models import User

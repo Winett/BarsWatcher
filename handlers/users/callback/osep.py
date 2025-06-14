@@ -81,8 +81,6 @@ async def watching_osep_command(msg: CallbackQuery, state: FSMContext, session: 
     user_service = UserService(session)
     OsepNotificator.stop_watching(msg.from_user.id)
     await user_service.set_osep_status_used(msg.from_user.id, False)
-
-    # await msg.message.answer('Уведомления о ОСЭПе выключены!')
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} снял отслеживание ОСЭП!')
     await msg.answer('Уведомления о ОСЭПе выключены!')
     await msg.message.edit_text(f'Отслеживание ОСЭП: {"❌"}\n'

@@ -1,5 +1,5 @@
-from sqlalchemy import String, ForeignKey, BigInteger, Boolean
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import String, BigInteger, Boolean
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
     pass

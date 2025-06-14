@@ -1,11 +1,10 @@
-from asyncio import sleep, gather
+from asyncio import sleep
 import json
 from loguru import logger
-from typing import Optional, Callable, Awaitable
 
 from watchers.base import BaseAuth
 from watchers.exceptions import LoginError
-from watchers.osep.osepmodel import AttachmentData, Attachments
+from watchers.osep.osepmodel import AttachmentData
 from settings import settings
 
 class WatcherOsep(BaseAuth):

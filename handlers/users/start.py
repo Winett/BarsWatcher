@@ -1,7 +1,6 @@
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram import Router
 
 from keyboards.inline import get_start_keyboard
