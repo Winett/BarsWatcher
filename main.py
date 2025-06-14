@@ -18,7 +18,7 @@ from middlewares.db import DatabaseMiddleware
 from watchers.notificator import Notificator
 from watchers.base import BaseAuth
 
-from loader import recover_notifications_over_restarting_bot
+from loader import recover_notifications_over_restarting_bot, recover_notifications_over_restarting_bot_osep
 
 
 
@@ -54,6 +54,7 @@ async def main():
     )
 
     await recover_notifications_over_restarting_bot()
+    await recover_notifications_over_restarting_bot_osep()
     about = await bot.get_me()
 
     await bot.set_my_commands([
