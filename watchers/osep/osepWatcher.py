@@ -31,7 +31,7 @@ class WatcherOsep(BaseAuth):
                 return True
             async with session.post(self.login_url, data={'curl': 'Z2FowaZ2F', 'flags': 0, 'forcedownlevel': 0, 'formdir': 2,
                                                     'username': self.username, 'password': self.password, 'isUtf8': 1,
-                                                    'trusted': 4}, allow_redirects=False):
+                                                    'trusted': 0}, allow_redirects=False):
                 pass
             if await self.check_auth(session):
                 logger.info(f"{self.__class__.__name__}-- Авторизация с помощью пароля({self.username}) --")
@@ -58,7 +58,7 @@ class WatcherOsep(BaseAuth):
                     session = await self.get_session()
                 try:
                     async with session.post(self.mails_url, allow_redirects=False) as response:
-
+                        # logger.debug(f"{self.__class__.__name__} Проверка авторизации: {session.cookie_jar.filter_cookies(self.mails_url)}")
                         if response.status == 401:
                             logger.warning("-- Сессия устарела, выполняем перелогин --")
                             await self.login()
