@@ -118,5 +118,10 @@ class UserService:
             users = await session.execute(select(User).where(User.used_bars == True))
             return users.scalars().all()
 
+    async def find_all_users_used_osep(self) -> list[User]:
+        async with self.session_maker as session:
+            users = await session.execute(select(User).where(User.used_osep == True))
+            return users.scalars().all()
+
 
 
