@@ -6,6 +6,7 @@ from typing import Optional, Callable, Awaitable
 from watchers.base import BaseAuth
 from watchers.exceptions import LoginError
 from watchers.osep.osepmodel import AttachmentData, Attachments
+from settings import settings
 
 class WatcherOsep(BaseAuth):
     mails_url = 'https://mail.mpei.ru/owa/sessiondata.ashx?appcacheclient=0'
@@ -14,7 +15,10 @@ class WatcherOsep(BaseAuth):
     attachments_url = "https://mail.mpei.ru/owa/service.svc?action=GetConversationItems"
     get_attachment_url = "https://mail.mpei.ru/owa/service.svc/s/GetFileAttachment"
 
-    timeout = 5
+    if settings.DEBUG:
+        timeout = 5
+    else:
+        timeout = 60
 
     def __init__(self, username: str, password: str):
         super().__init__(username, password)
@@ -63,7 +67,6 @@ class WatcherOsep(BaseAuth):
                             continue
 
                         try:
-                            # print(await response.text())
                             current_data = json.loads(await response.text())
                         except json.decoder.JSONDecodeError:
                             logger.error(f"{self.__class__.__name__} Ошибка декодирования JSON: {response.text[:200]}")
