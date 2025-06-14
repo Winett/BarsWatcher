@@ -107,6 +107,9 @@ class WatcherKM(BaseAuth):
 
         async with session:
             while self.watching:
+                if session.closed:
+                    logger.warning("-- Сессия закрылась, пеероткрываю --")
+                    session = await self.get_session()
                 try:
                     async with await session.get(self.summary_url, params={'studentID': self.student_id}, allow_redirects=False) as response:
                         content = await response.read()
