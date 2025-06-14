@@ -26,18 +26,18 @@ from pathlib import Path
 
 
 logger.remove()
-if settings.DEBUG:
-    logger.add(stderr, format="<white>{time:HH:mm:ss:Z}</white>"
-                              " | <level>{level: <8}</level>"
-                              " | {name}:{function}:{line}"
-                              " | <cyan>{line}</cyan>"
-                              " - <magenta>{message}</magenta>", level="DEBUG")
+
+logger.add(stderr, format="<white>{time:HH:mm:ss:Z}</white>"
+                          " | <level>{level: <8}</level>"
+                          " | {name}:{function}:{line}"
+                          " | <cyan>{line}</cyan>"
+                          " - <magenta>{message}</magenta>", level="DEBUG")
 
 bot = Bot(
         token=settings.bot_token,
         default=DefaultBotProperties(parse_mode="HTML")
     )
-# logger.add(stderr)
+
 def check_log_size_and_send_to_admin(message: str, log: TextIOWrapper) -> bool:
     if Path(log.name).stat().st_size > 5 * 1024 * 1024:
         for admin in settings.admins:
