@@ -4,6 +4,7 @@ from pathlib import Path
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
+from aiogram.types import InputMediaDocument, FSInputFile
 from aiogram.types.bot_command import BotCommand
 from aiogram.fsm.storage.memory import MemoryStorage
 
@@ -20,26 +21,40 @@ from watchers.base import BaseAuth
 
 from loader import recover_notifications_over_restarting_bot, recover_notifications_over_restarting_bot_osep
 
+from _io import TextIOWrapper
+from pathlib import Path
 
 
 logger.remove()
-if not settings.DEBUG:
+if settings.DEBUG:
     logger.add(stderr, format="<white>{time:HH:mm:ss:Z}</white>"
                               " | <level>{level: <8}</level>"
+                              " | {name}:{function}:{line}"
                               " | <cyan>{line}</cyan>"
-                              " - <magenta>{message}</magenta>")
+                              " - <magenta>{message}</magenta>", level="DEBUG")
+
+bot = Bot(
+        token=settings.bot_token,
+        default=DefaultBotProperties(parse_mode="HTML")
+    )
 # logger.add(stderr)
-logger.add('log.log', rotation=8*1024*1024*5) #каждые 5 МБ
+def check_log_size_and_send_to_admin(message: str, log: TextIOWrapper) -> bool:
+    if Path(log.name).stat().st_size > 5 * 1024 * 1024:
+        for admin in settings.admins:
+            asyncio.create_task(bot.send_document(chat_id=admin, document=FSInputFile(path=Path(log.name)), caption="Лог бота"))
+        return True
+    return False
+
+logger.add('log.log', rotation=check_log_size_and_send_to_admin) #каждые 5 МБ
+
 (Path(__file__).parent / "sessions").mkdir(exist_ok=True, parents=True)
 BaseAuth.session_dir = Path(__file__).parent / "sessions"
 
 
 
 async def main():
-    bot = Bot(
-        token=settings.bot_token,
-        default=DefaultBotProperties(parse_mode="HTML")
-    )
+    print(f'{settings.DEBUG = }')
+
     await init_db()
     logger.info('База данных инициализирована!')
     Notificator.bot = bot
@@ -48,6 +63,7 @@ async def main():
 
     dp.message.middleware(DatabaseMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
+
 
 
     dp.include_routers(
