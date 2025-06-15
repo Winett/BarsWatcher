@@ -61,7 +61,7 @@ class WatcherOsep(BaseAuth):
                     session = await self.get_session()
                 try:
                     async with session.post(self.mails_url, allow_redirects=False) as response:
-                        # logger.debug(f"{self.__class__.__name__} Проверка авторизации: {session.cookie_jar.filter_cookies(self.mails_url)}")
+
                         if response.status == 401:
                             logger.warning("-- Сессия устарела, выполняем перелогин --")
                             await self.login()
@@ -95,11 +95,12 @@ class WatcherOsep(BaseAuth):
 
                     for conv_id in set(current_conversations.keys()) - set(last_conversations.keys()):
                         new_messages.append(current_conversations[conv_id])
-
+                    #TODO: игнорировать почту от рассылки sendbox@service-rsv.ru
                     for conv in new_messages:
                         msg = (f"НОВОЕ ПИСЬМО!\n"
                                  f"От: {', '.join(conv['UniqueSenders'])}\n"
                                  f"Тема: {conv['ConversationTopic']}\n"
+                                 #TODO: Если всё письмо не помещается в conv['Preview'] - нужно делать доп запрос на получение всего текста письма
                                  f"Содержание: {conv['Preview']}\n\n")
                         files = []
                         if conv['HasAttachments']:
@@ -121,7 +122,8 @@ class WatcherOsep(BaseAuth):
 
                 except Exception as e:
                     logger.error(f"{self.__class__.__name__} Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}")
-                    await callback(f"Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}")
+                    #TODO: user_id=settings.admins[0] - временное решение; Возможно надо сделать, что все ошибки, которые возникают отправлялись админу
+                    await callback(f"Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}", user_id=settings.admins[0])
                     await sleep(10)
 
                 finally:
