@@ -1,6 +1,6 @@
 import asyncio
 from sys import stderr
-from pathlib import Path
+from datetime import timedelta, timezone
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
@@ -26,6 +26,11 @@ from pathlib import Path
 
 
 logger.remove()
+
+utc_plus_3 = timezone(timedelta(hours=0))
+def format_time_utc3(record):
+    record.update(time=record['time'].astimezone(utc_plus_3))
+logger = logger.patch(format_time_utc3)
 
 logger.add(stderr, format="<white>{time:HH:mm:ss:Z}</white>"
                           " | <level>{level: <8}</level>"
