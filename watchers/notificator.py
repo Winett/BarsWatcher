@@ -129,12 +129,10 @@ class OsepNotificator(Notificator):
         target_id = user_id or self.chat_id
         try:
             if kwargs.get('files'):
-                files = kwargs['files']  # list[AttachmentData]
-
-                # Параллельная загрузка файлов
-                file_contents = await asyncio.gather(
-                    *[self.watcher.get_attachment(file.id) for file in files]
-                )
+                files = kwargs['files']
+                file_contents = []
+                for file in files:
+                    file_contents.append(await self.watcher.get_attachment(file.id))
                 media_group = []
                 for content, filename in zip(file_contents, files):
                     input_file = BufferedInputFile(content, filename=filename.name)
