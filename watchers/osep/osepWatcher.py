@@ -68,6 +68,10 @@ class WatcherOsep(BaseAuth):
                             await sleep(5)
                             continue
 
+                        if response.status == 500:
+                            logger.warning("-- Ошибка сервера --")
+                            raise ServerError500(f"-- Ошибка сервера --")
+
                         try:
                             current_data = json.loads(await response.text())
                         except json.decoder.JSONDecodeError:

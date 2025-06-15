@@ -73,6 +73,10 @@ class Notificator(ABC):
         while self.watcher.watching:
             try:
                 await self.watcher.watch(callback=self.notify)
+            except ServerError500 as e:
+                await self.notify(f"500 сервера, попробуйте повторить действие позже")
+                await self.notify(f"Ошибка сервера: {e.__class__.__name__} {e.args} у {self.chat_id} {self.username}",
+                                  user_id=settings.admins[0])
             except Exception as e:
                 await self._handle_watch_error(e)
             await asyncio.sleep(self.timeout_after_error)
