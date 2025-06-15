@@ -7,7 +7,7 @@ from watchers.bars.barsWatcher import WatcherKM
 from watchers.osep.osepWatcher import WatcherOsep
 import asyncio
 
-from watchers.exceptions import LoginError
+from watchers.exceptions import LoginError, ServerError500
 
 from settings import settings
 
