@@ -45,6 +45,9 @@ class WatcherOsep(BaseAuth):
         async with session.get(self.owa_url, allow_redirects=False) as response:
             return response.status == 200
 
+    def stop(self):
+        self.watching = False
+
     @logger.catch
     async def watch(self, callback):
 
