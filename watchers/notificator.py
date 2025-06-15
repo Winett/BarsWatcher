@@ -7,7 +7,7 @@ from watchers.bars.barsWatcher import WatcherKM
 from watchers.osep.osepWatcher import WatcherOsep
 import asyncio
 
-from watchers.exceptions import LoginError
+from watchers.exceptions import LoginError, ServerError500
 
 from settings import settings
 
@@ -73,6 +73,10 @@ class Notificator(ABC):
         while self.watcher.watching:
             try:
                 await self.watcher.watch(callback=self.notify)
+            except ServerError500 as e:
+                await self.notify(f"500 сервера, попробуйте повторить действие позже")
+                await self.notify(f"Ошибка сервера: {e.__class__.__name__} {e.args} у {self.chat_id} {self.username}",
+                                  user_id=settings.admins[0])
             except Exception as e:
                 await self._handle_watch_error(e)
             await asyncio.sleep(self.timeout_after_error)
@@ -129,12 +133,10 @@ class OsepNotificator(Notificator):
         target_id = user_id or self.chat_id
         try:
             if kwargs.get('files'):
-                files = kwargs['files']  # list[AttachmentData]
-
-                # Параллельная загрузка файлов
-                file_contents = await asyncio.gather(
-                    *[self.watcher.get_attachment(file.id) for file in files]
-                )
+                files = kwargs['files']
+                file_contents = []
+                for file in files:
+                    file_contents.append(await self.watcher.get_attachment(file.id))
                 media_group = []
                 for content, filename in zip(file_contents, files):
                     input_file = BufferedInputFile(content, filename=filename.name)

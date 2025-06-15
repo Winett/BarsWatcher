@@ -3,7 +3,7 @@ import json
 from loguru import logger
 
 from watchers.base import BaseAuth
-from watchers.exceptions import LoginError
+from watchers.exceptions import LoginError, ServerError500
 from watchers.osep.osepmodel import AttachmentData
 from settings import settings
 
@@ -29,12 +29,12 @@ class WatcherOsep(BaseAuth):
             if await self._load_session() and await self.check_auth(session):
                 logger.info(f"-- Авторизация с помощью cookies({self.username}) --")
                 return True
-            async with session.post(self.login_url, data={'curl': 'Z2FowaZ2F', 'flags': 0, 'forcedownlevel': 0, 'formdir': 2,
-                                                    'username': self.username, 'password': self.password, 'isUtf8': 1,
-                                                    'trusted': 0}, allow_redirects=False):
+            session.cookie_jar.clear()
+            async with session.post(self.login_url, data={'curl': 'Z2FowaZ2F', 'flags': 0, 'forcedownlevel': 0, 'formdir': 2, 'username': self.username, 'password': self.password, 'isUtf8': 1, 'trusted': 4}, allow_redirects=False):
                 pass
             if await self.check_auth(session):
                 logger.info(f"{self.__class__.__name__}-- Авторизация с помощью пароля({self.username}) --")
+                self._session = session
                 await self._save_session()
                 return True
 
@@ -42,7 +42,7 @@ class WatcherOsep(BaseAuth):
             raise LoginError(f"Неверные данные для входа: {self.username}")
 
     async def check_auth(self, session) -> bool:
-        async with session.get(self.owa_url, allow_redirects=False) as response:
+        async with session.post(self.mails_url, allow_redirects=False) as response:
             return response.status == 200
 
     def stop(self):
@@ -61,17 +61,21 @@ class WatcherOsep(BaseAuth):
                     session = await self.get_session()
                 try:
                     async with session.post(self.mails_url, allow_redirects=False) as response:
-                        # logger.debug(f"{self.__class__.__name__} Проверка авторизации: {session.cookie_jar.filter_cookies(self.mails_url)}")
+
                         if response.status == 401:
                             logger.warning("-- Сессия устарела, выполняем перелогин --")
                             await self.login()
                             await sleep(5)
                             continue
 
+                        if response.status == 500:
+                            logger.warning("-- Ошибка сервера --")
+                            raise ServerError500(f"-- Ошибка сервера --")
+
                         try:
                             current_data = json.loads(await response.text())
                         except json.decoder.JSONDecodeError:
-                            logger.error(f"{self.__class__.__name__} Ошибка декодирования JSON: {response.text[:200]}")
+                            logger.error(f"{self.__class__.__name__} Ошибка декодирования JSON: {(await response.text())}")
                             await sleep(5)
                             continue
 
@@ -91,11 +95,12 @@ class WatcherOsep(BaseAuth):
 
                     for conv_id in set(current_conversations.keys()) - set(last_conversations.keys()):
                         new_messages.append(current_conversations[conv_id])
-
+                    #TODO: игнорировать почту от рассылки sendbox@service-rsv.ru
                     for conv in new_messages:
                         msg = (f"НОВОЕ ПИСЬМО!\n"
                                  f"От: {', '.join(conv['UniqueSenders'])}\n"
                                  f"Тема: {conv['ConversationTopic']}\n"
+                                 #TODO: Если всё письмо не помещается в conv['Preview'] - нужно делать доп запрос на получение всего текста письма
                                  f"Содержание: {conv['Preview']}\n\n")
                         files = []
                         if conv['HasAttachments']:
@@ -110,9 +115,15 @@ class WatcherOsep(BaseAuth):
 
                     last_conversations = current_conversations
 
+                except ServerError500 as e:
+                    logger.error(f"{self.__class__.__name__} Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}")
+                    await callback(f"Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}", user_id=settings.admins[0])
+                    raise
+
                 except Exception as e:
                     logger.error(f"{self.__class__.__name__} Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}")
-                    await callback(f"Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}")
+                    #TODO: user_id=settings.admins[0] - временное решение; Возможно надо сделать, что все ошибки, которые возникают отправлялись админу
+                    await callback(f"Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}", user_id=settings.admins[0])
                     await sleep(10)
 
                 finally:
