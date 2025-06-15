@@ -37,7 +37,7 @@ class WatcherKM(BaseAuth):
                         logger.debug(f"{self.__class__.__name__} -- Авторизация прошла успешно({self.username}) с помощью cookies --")
                         return True
                     logger.warning(f"{self.__class__.__name__} -- Ошибка авторизации -- Обновляю куки...")
-
+            session.cookie_jar.clear()
             async with session.get(self.login_url, allow_redirects=False) as response:
                 content = await response.read()
 

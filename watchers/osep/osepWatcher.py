@@ -29,9 +29,8 @@ class WatcherOsep(BaseAuth):
             if await self._load_session() and await self.check_auth(session):
                 logger.info(f"-- Авторизация с помощью cookies({self.username}) --")
                 return True
-            async with session.post(self.login_url, data={'curl': 'Z2FowaZ2F', 'flags': 0, 'forcedownlevel': 0, 'formdir': 2,
-                                                    'username': self.username, 'password': self.password, 'isUtf8': 1,
-                                                    'trusted': 0}, allow_redirects=False):
+            session.cookie_jar.clear()
+            async with session.post(self.login_url, data={'curl': 'Z2FowaZ2F', 'flags': 0, 'forcedownlevel': 0, 'formdir': 2, 'username': self.username, 'password': self.password, 'isUtf8': 1, 'trusted': 4}, allow_redirects=False):
                 pass
             if await self.check_auth(session):
                 logger.info(f"{self.__class__.__name__}-- Авторизация с помощью пароля({self.username}) --")
@@ -42,7 +41,7 @@ class WatcherOsep(BaseAuth):
             raise LoginError(f"Неверные данные для входа: {self.username}")
 
     async def check_auth(self, session) -> bool:
-        async with session.get(self.owa_url, allow_redirects=False) as response:
+        async with session.post(self.mails_url, allow_redirects=False) as response:
             return response.status == 200
 
     def stop(self):
@@ -71,7 +70,7 @@ class WatcherOsep(BaseAuth):
                         try:
                             current_data = json.loads(await response.text())
                         except json.decoder.JSONDecodeError:
-                            logger.error(f"{self.__class__.__name__} Ошибка декодирования JSON: {response.text[:200]}")
+                            logger.error(f"{self.__class__.__name__} Ошибка декодирования JSON: {(await response.text())}")
                             await sleep(5)
                             continue
 
