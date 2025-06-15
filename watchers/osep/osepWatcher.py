@@ -34,6 +34,7 @@ class WatcherOsep(BaseAuth):
                 pass
             if await self.check_auth(session):
                 logger.info(f"{self.__class__.__name__}-- Авторизация с помощью пароля({self.username}) --")
+                self._session = session
                 await self._save_session()
                 return True
 

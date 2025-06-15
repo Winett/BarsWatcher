@@ -55,6 +55,7 @@ class WatcherKM(BaseAuth):
                 pass
 
             if session.cookie_jar.filter_cookies(self.login_url).get('auth_bars'):
+                self._session = session
                 await self._save_session()
                 return True
 
