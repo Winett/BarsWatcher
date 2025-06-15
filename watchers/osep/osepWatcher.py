@@ -3,7 +3,7 @@ import json
 from loguru import logger
 
 from watchers.base import BaseAuth
-from watchers.exceptions import LoginError
+from watchers.exceptions import LoginError, ServerError500
 from watchers.osep.osepmodel import AttachmentData
 from settings import settings
 
@@ -113,6 +113,11 @@ class WatcherOsep(BaseAuth):
                         logger.info(f"ОБНОВЛЕНО ПИСЬМО: {conv['ConversationTopic']}")
 
                     last_conversations = current_conversations
+
+                except ServerError500 as e:
+                    logger.error(f"{self.__class__.__name__} Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}")
+                    await callback(f"Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}", user_id=settings.admins[0])
+                    raise
 
                 except Exception as e:
                     logger.error(f"{self.__class__.__name__} Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}")
