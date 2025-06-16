@@ -107,6 +107,10 @@ class Notificator(ABC):
     def get_all_instances(cls) -> Dict[int, 'Notificator']:
         return cls._instances.get(cls.__name__, {}).copy()
 
+    @classmethod
+    def get_count_of_instances(cls):
+        return len(cls._instances[cls.__class__.__name__])
+
 class BarsNotificator(Notificator):
 
     def __init__(self, chat_id: int, username: str, password: str):

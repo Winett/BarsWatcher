@@ -16,6 +16,7 @@ from handlers import router as handlers_router
 from database.db import init_db
 from middlewares.db import DatabaseMiddleware
 
+from services.notification import NotificationService
 from watchers.notificator import Notificator
 from watchers.base import BaseAuth
 
@@ -63,6 +64,7 @@ async def main():
     await init_db()
     logger.info('База данных инициализирована!')
     Notificator.bot = bot
+    NotificationService.bot = bot
 
     dp = Dispatcher(storage=MemoryStorage())
 
@@ -80,7 +82,9 @@ async def main():
     about = await bot.get_me()
 
     await bot.set_my_commands([
-        BotCommand(command='/start', description='Перезапустить бота')
+        BotCommand(command='/start', description='Перезапустить бота'),
+        BotCommand(command='/suggestion', description='Отправить предложение по улучшению бота'),
+        BotCommand(command='/report', description='Отправить админу сообщение о неполадках'),
     ])
     await bot.delete_webhook(drop_pending_updates=True)
     logger.info(f'Бот запущен! bot_id = {about.id} username = {about.username}')
