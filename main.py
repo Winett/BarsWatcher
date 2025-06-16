@@ -16,6 +16,7 @@ from handlers import router as handlers_router
 from database.db import init_db
 from middlewares.db import DatabaseMiddleware
 
+from services.notification import NotificationService
 from watchers.notificator import Notificator
 from watchers.base import BaseAuth
 
@@ -63,6 +64,7 @@ async def main():
     await init_db()
     logger.info('База данных инициализирована!')
     Notificator.bot = bot
+    NotificationService.bot = bot
 
     dp = Dispatcher(storage=MemoryStorage())
 
