@@ -55,3 +55,10 @@ def update_osep_data_keyboard(used_osep: bool = False):
         InlineKeyboardButton(text="Обновить данные для входа в ОСЭП", callback_data='osep_credentials'),
     )
     return keyboard.as_markup()
+
+def confirm_keyboard():
+    keyboard = InlineKeyboardBuilder()
+    keyboard.row(
+        InlineKeyboardButton(text="Подтвердить", callback_data='confirm'),
+    )
+    return keyboard.as_markup()
