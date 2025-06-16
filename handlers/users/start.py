@@ -6,6 +6,7 @@ from aiogram import Router
 from keyboards.inline import get_start_keyboard
 from sqlalchemy.orm import sessionmaker
 from services.user import UserService
+from services.notification import NotificationService
 
 from loguru import logger
 
@@ -15,6 +16,7 @@ router = Router(name=__name__)
 async def start_command(msg: Message, state: FSMContext, session: sessionmaker):
     await state.clear()
     user_service = UserService(session)
+    notification_service = NotificationService(session)
     if not await user_service.is_exists(msg.from_user.id):
         await user_service.create(msg.from_user.id)
         logger.info(f'Появился новый пользователь! '
