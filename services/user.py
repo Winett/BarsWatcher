@@ -122,4 +122,10 @@ class UserService:
             return users.scalars().all()
 
 
+    async def find_all_users(self) -> list[User]:
+        async with self.session_maker as session:
+            users = await session.execute(select(User))
+            return users.scalars().all()
+
+
 
