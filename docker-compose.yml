@@ -26,10 +26,8 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
-    environment:
-      TOKEN: 1675511108:AAFtERRH-qkiKucENNVeKpN7-tBvqS2osLY
-    volumes:
-      - bot_data:/app
+#    volumes:
+#      - bot_data:/app
 
   postgres_admin:
     image: dpage/pgadmin4
@@ -47,4 +45,4 @@ services:
 
 volumes:
   postgres_data:
-  bot_data:
+#  bot_data:
