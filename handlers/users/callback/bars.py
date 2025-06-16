@@ -65,7 +65,7 @@ async def bars_password_command(msg: Message, state: FSMContext, session: sessio
     await msg.delete()
     # await user_service.set_bars_status_used(msg.from_user.id, True)
     await msg.answer('Данные для входа в БАРС сохранены!\n'
-                     'Жми на /start и выбирай "повещения БАРС" -> "Отслеживать БАРС"')
+                     'Жми на /start и выбирай "Оповещения БАРС" -> "Отслеживать БАРС"')
     await state.clear()
     return
 
