@@ -31,6 +31,3 @@ async def start_command(msg: Message, state: FSMContext, session: sessionmaker):
                      'Выберите, чтобы вы хотели начать отслеживать:',
                      reply_markup=get_start_keyboard()
                      )
-
-
-
