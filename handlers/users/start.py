@@ -22,6 +22,9 @@ async def start_command(msg: Message, state: FSMContext, session: sessionmaker):
         logger.info(f'Появился новый пользователь! '
                     f'user_id = {msg.from_user.id} username = {msg.from_user.username} '
                     f'{msg.from_user.first_name = } {msg.from_user.last_name = }')
+        await notification_service.notify_admins(message=f'Появился новый пользователь! '
+                                                  f'user_id = <code>{msg.from_user.id}</code> username = @{msg.from_user.username} '
+                                                  f'{msg.from_user.first_name = } {msg.from_user.last_name = }')
 
     await msg.answer('Добро пожаловать в бот для отслеживания изменений на ОСЭП и БАРС\n'
                      # 'Данный бот не является официальным приложение ФГБОУ ВО НИУ МЭИ и является энтузиастским проектом'
