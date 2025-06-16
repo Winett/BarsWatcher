@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   postgres:
@@ -15,9 +15,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-#    volumes:
-#      - postgres_data:/var/lib/postgresql/data
-#      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
 
   bot:
@@ -27,6 +26,10 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    environment:
+      TOKEN: 1675511108:AAFtERRH-qkiKucENNVeKpN7-tBvqS2osLY
+    volumes:
+      - bot_data:/app
 
   postgres_admin:
     image: dpage/pgadmin4
@@ -42,5 +45,6 @@ services:
     ports:
       - "5050:80"
 
-#volumes:
-#  postgres_data:
+volumes:
+  postgres_data:
+  bot_data:
