@@ -58,7 +58,8 @@ async def osep_password_command(msg: Message, state: FSMContext, session: sessio
     user_service = UserService(session)
     await user_service.set_osep(msg.from_user.id, osep_login, msg.text)
     await msg.delete()
-    await msg.answer('Данные для входа в ОСЭП сохранены!')
+    await msg.answer('Данные для входа в ОСЭП сохранены!\n'
+                     'Жми на /start и выбирай "Оповещения ОСЭП" -> "Отслеживать ОСЭП"')
     await state.clear()
     return
 
