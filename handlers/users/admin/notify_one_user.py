@@ -23,9 +23,7 @@ async def notify_user_command(msg: Message, state: FSMContext, session: sessionm
 async def notify_user_command(msg: Message, state: FSMContext, session: sessionmaker):
     user_service = UserService(session)
     try:
-        if not await user_service.is_exists(int(msg.text)):
-            await msg.answer('Такого пользователя не существует!\nОтправьте user_id заново:')
-            return
+        int(msg.text)
     except ValueError:
         await msg.answer('Ошибка ввода id пользователя\nОтправьте user_id заново:')
         return

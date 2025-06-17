@@ -64,9 +64,14 @@ async def bars_password_command(msg: Message, state: FSMContext, session: sessio
     await user_service.set_bars(msg.from_user.id, bars_login, msg.text)
     await msg.delete()
     # await user_service.set_bars_status_used(msg.from_user.id, True)
-    await msg.answer('Данные для входа в БАРС сохранены!\n'
-                     'Жми на /start и выбирай "Оповещения БАРС" -> "Отслеживать БАРС"')
+    # await msg.answer('Данные для входа в БАРС сохранены!\n'
+    #                  'Жми на /start и выбирай "Оповещения БАРС" -> "Отслеживать БАРС"')
     await state.clear()
+    if not (await BarsNotificator(msg.from_user.id, bars_login, msg.text).start_watching()):
+        return
+    await user_service.set_bars_status_used(msg.from_user.id, True)
+    logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание БАРСа!')
+    await msg.answer('Уведомления о БАРСе включены!')
     return
 
 @router.callback_query(F.data == 'watching_bars')
@@ -74,8 +79,7 @@ async def watching_bars_command(msg: CallbackQuery, state: FSMContext, session: 
     user_service = UserService(session)
     login = await user_service.get_bars_login(msg.from_user.id)
     password = await user_service.get_bars_password(msg.from_user.id)
-    if not (await BarsNotificator(msg.from_user.id, login, password).start_watching()):
-        return
+
     await user_service.set_bars_status_used(msg.from_user.id, True)
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание БАРСа!')
     # await msg.message.answer('Уведомления о БАРСе включены!')
