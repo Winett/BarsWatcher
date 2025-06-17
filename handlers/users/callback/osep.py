@@ -58,9 +58,14 @@ async def osep_password_command(msg: Message, state: FSMContext, session: sessio
     user_service = UserService(session)
     await user_service.set_osep(msg.from_user.id, osep_login, msg.text)
     await msg.delete()
-    await msg.answer('Данные для входа в ОСЭП сохранены!\n'
-                     'Жми на /start и выбирай "Оповещения ОСЭП" -> "Отслеживать ОСЭП"')
+    # await msg.answer('Данные для входа в ОСЭП сохранены!\n'
+    #                  'Жми на /start и выбирай "Оповещения ОСЭП" -> "Отслеживать ОСЭП"')
     await state.clear()
+    if not (await OsepNotificator(msg.from_user.id, osep_login, msg.text).start_watching()):
+        return
+    await user_service.set_osep_status_used(msg.from_user.id, True)
+    logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание ОСЭП!')
+    await msg.answer('Уведомления о ОСЭПе включены!')
     return
 
 @router.callback_query(F.data == 'watching_osep')
