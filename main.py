@@ -28,7 +28,7 @@ from pathlib import Path
 
 logger.remove()
 
-utc_plus_3 = timezone(timedelta(hours=0))
+utc_plus_3 = timezone(timedelta(hours=3))
 def format_time_utc3(record):
     record.update(time=record['time'].astimezone(utc_plus_3))
 logger = logger.patch(format_time_utc3)
