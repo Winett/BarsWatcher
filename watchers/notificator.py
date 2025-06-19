@@ -152,11 +152,12 @@ class OsepNotificator(Notificator):
                     chat_id=target_id,
                     text=message
                 )
-                #TODO: Сделать "ответ" на сообщение с письмом файлам
+
                 for i in range(0, len(files), 10):
                     await self.bot.send_media_group(
                         chat_id=target_id,
-                        media=media_group[i:i+10]
+                        media=media_group[i:i+10],
+                        reply_to_message_id=a.message_id
                     )
 
                 return
