@@ -127,5 +127,10 @@ class UserService:
             users = await session.execute(select(User))
             return users.scalars().all()
 
+    async def find_user(self, user_id: int) -> User:
+        async with self.session_maker as session:
+            user = await session.execute(select(User).where(User.user_id == user_id))
+            return user.scalar()
+
 
 
