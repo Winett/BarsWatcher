@@ -78,9 +78,8 @@ async def main():
     dp.include_routers(
         handlers_router
     )
-
-    await recover_notifications_over_restarting_bot()
-    await recover_notifications_over_restarting_bot_osep()
+    asyncio.create_task(recover_notifications_over_restarting_bot())
+    asyncio.create_task(recover_notifications_over_restarting_bot_osep())
     about = await bot.get_me()
 
     await bot.set_my_commands([
