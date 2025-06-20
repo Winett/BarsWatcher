@@ -34,7 +34,6 @@ async def get_user_id_command(msg: Message, state: FSMContext, session: sessionm
     message = (f"Пользователь с id {msg.text} @{user.username}\n\n"
                 f"Отслеживание БАРС: {'✅' if user.used_bars else '❌'}\n"
                 f"Отслеживание ОСЭП: {'✅' if user.used_osep else '❌'}\n")
-    #TODO: сделать кнопки для включения и отключения оповещений?
     await msg.answer(message, reply_markup=enable_watching_keyboard(user.user_id,user.used_bars, user.used_osep))
 
 @router.callback_query(F.data.startswith('dont_watching_bars_') | F.data.startswith('watching_osep_') | F.data.startswith('dont_watching_osep_') | F.data.startswith('watching_bars_') | F.data.startswith('dont_watching_bars_'))
