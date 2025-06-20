@@ -4,3 +4,6 @@ class LoginError(Exception):
 
 class ServerError500(Exception):
     pass
+
+class ServerError401(Exception):
+    pass
