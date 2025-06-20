@@ -8,11 +8,14 @@ from watchers.osep.osepWatcher import WatcherOsep
 import asyncio
 
 from watchers.exceptions import LoginError, ServerError500
+from database.db import async_session
+from services.user import UserService
 
 from settings import settings
 
 from typing import Dict, Optional, TypeVar, Type, Any
 from abc import ABC, abstractmethod
+import time
 
 T = TypeVar('T', bound='Notificator')
 
@@ -70,19 +73,49 @@ class Notificator(ABC):
 
     async def _watch_loop(self):
         self.watcher.watching = True
+        error_count = 0
+        max_errors = 3
+        error_window_seconds = 180
+        last_error_time = None
+
         while self.watcher.watching:
             try:
                 await self.watcher.watch(callback=self.notify)
-            except ServerError500 as e:
-                await self.notify(f"500 сервера, попробуйте повторить действие позже")
+                error_count = 0
+
+            except (ServerError500, LoginError) as e:
+                logger.error(f"Ошибка сервера: {e.__class__.__name__} {e.args} у {self.chat_id} {self.username}")
+                current_time = time.time()
+
+                if last_error_time and (current_time - last_error_time > error_window_seconds):
+                    error_count = 0
+
+                error_count += 1
+                last_error_time = current_time
+
+                if error_count >= max_errors:
+                    await self.notify(f"Слишком много ошибок сервера подряд, отслеживание прекращено\n\nПопробуйте подключить отслеживание позже")
+                    await self.notify(
+                        f"Автоотключение из-за ошибок: {e.__class__.__name__} у {self.chat_id} {self.username}",
+                        user_id=settings.admins[0])
+                    self.stop_watching(self.chat_id)
+                    async with async_session() as session:
+                        if self.__class__.__name__ == "BarsNotificator":
+                            await UserService(session).set_bars_status_used(self.chat_id, False)
+                        else:
+                            await UserService(session).set_osep_status_used(self.chat_id, False)
+                    break
                 await self.notify(f"Ошибка сервера: {e.__class__.__name__} {e.args} у {self.chat_id} {self.username}",
                                   user_id=settings.admins[0])
+
             except Exception as e:
                 await self._handle_watch_error(e)
+                error_count = 0
+
             await asyncio.sleep(self.timeout_after_error)
 
     async def _handle_watch_error(self, error: Exception):
-        error_msg = f"{self.__class__.__name__} ошибка: {error.__class__.__name__}"
+        error_msg = f"{self.__class__.__name__} ошибка: {error.__class__.__name__} {self.chat_id} {self.username}"
         await self.notify(error_msg, user_id=settings.admin_id[0])
         logger.error(f"{error_msg}: {str(error)}")
 
@@ -147,20 +180,29 @@ class OsepNotificator(Notificator):
 
                     media_group.append(InputMediaDocument(media=input_file, filename=filename.name))
 
+                a = None
+                for i in range(0, len(message), 4096):
+                    a = await self.bot.send_message(
+                        chat_id=target_id,
+                        text=message[i:i+4096],
+                        reply_to_message_id=a.message_id if a else None
+                    ) # если вдруг письмо большое, то оно будет разбито на несколько частей
+                    await asyncio.sleep(.3)
 
-                a = await self.bot.send_message(
-                    chat_id=target_id,
-                    text=message
-                )
-                #TODO: Сделать "ответ" на сообщение с письмом файлам
                 for i in range(0, len(files), 10):
                     await self.bot.send_media_group(
                         chat_id=target_id,
-                        media=media_group[i:i+10]
+                        media=media_group[i:i+10],
+                        reply_to_message_id=a.message_id
                     )
 
                 return
-            await self.bot.send_message(target_id, message)
+            for i in range(0, len(message), 4096):
+                await self.bot.send_message(
+                    chat_id=target_id,
+                    text=message[i:i+4096],
+                )
+                await asyncio.sleep(.3)
 
         except Exception as e:
             logger.error(f"Ошибка отправки сообщения: {e}")

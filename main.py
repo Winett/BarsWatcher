@@ -15,6 +15,8 @@ from handlers import router as handlers_router
 
 from database.db import init_db
 from middlewares.db import DatabaseMiddleware
+from middlewares.throttling import ThrottlingMiddleware
+from middlewares.logging import LoggingMiddleware
 
 from services.notification import NotificationService
 from watchers.notificator import Notificator
@@ -28,7 +30,7 @@ from pathlib import Path
 
 logger.remove()
 
-utc_plus_3 = timezone(timedelta(hours=0))
+utc_plus_3 = timezone(timedelta(hours=3))
 def format_time_utc3(record):
     record.update(time=record['time'].astimezone(utc_plus_3))
 logger = logger.patch(format_time_utc3)
@@ -70,15 +72,16 @@ async def main():
 
     dp.message.middleware(DatabaseMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
+    dp.update.outer_middleware(ThrottlingMiddleware())
+    dp.update.outer_middleware(LoggingMiddleware())
 
 
 
     dp.include_routers(
         handlers_router
     )
-
-    await recover_notifications_over_restarting_bot()
-    await recover_notifications_over_restarting_bot_osep()
+    asyncio.create_task(recover_notifications_over_restarting_bot())
+    asyncio.create_task(recover_notifications_over_restarting_bot_osep())
     about = await bot.get_me()
 
     await bot.set_my_commands([

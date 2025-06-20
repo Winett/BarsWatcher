@@ -9,6 +9,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger)
+    username: Mapped[str] = mapped_column(String, default=None, nullable=True)
 
     used_osep: Mapped[bool] = mapped_column(Boolean, default=False)
     used_bars: Mapped[bool] = mapped_column(Boolean, default=False)

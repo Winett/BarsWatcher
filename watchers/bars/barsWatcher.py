@@ -99,7 +99,7 @@ class WatcherKM(BaseAuth):
             logger.error(f"Ошибка авторизации: {e}")
             return False
 
-    @logger.catch
+    @logger.catch(reraise=True)
     async def watch(self, callback: Optional[Callable[[str], Awaitable[None]]] = None):
         self.watching = True
         last_data: dict[str, DisciplineWatcher] = {}

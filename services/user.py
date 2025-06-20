@@ -18,9 +18,9 @@ class UserService:
             user = await session.execute(select(User).where(User.user_id == user_id))
             return bool(user.scalar())
 
-    async def create(self, user_id: int) -> None:
+    async def create(self, user_id: int, username: str = None) -> None:
         async with self.session_maker as session:
-            user = User(user_id=user_id)
+            user = User(user_id=user_id, username=username)
             session.add(user)
             await session.commit()
 
@@ -126,6 +126,17 @@ class UserService:
         async with self.session_maker as session:
             users = await session.execute(select(User))
             return users.scalars().all()
+
+    async def find_user(self, user_id: int) -> User:
+        async with self.session_maker as session:
+            user = await session.execute(select(User).where(User.user_id == user_id))
+            return user.scalar()
+
+    async def update_username(self, user_id: int, username: str) -> None:
+        async with self.session_maker as session:
+            user = (await session.execute(select(User).where(User.user_id == user_id))).scalar()
+            user.username = username
+            await session.commit()
 
 
 

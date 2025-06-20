@@ -62,3 +62,24 @@ def confirm_keyboard():
         InlineKeyboardButton(text="Подтвердить", callback_data='confirm'),
     )
     return keyboard.as_markup()
+
+def enable_watching_keyboard(user_id: int, used_bars: bool = False, used_osep: bool = False):
+    keyboard = InlineKeyboardBuilder()
+    if used_bars:
+        keyboard.row(
+            InlineKeyboardButton(text="Перестать отслеживать БАРС", callback_data=f'dont_watching_bars_{user_id}'),
+        )
+    else:
+        keyboard.row(
+            InlineKeyboardButton(text="Отслеживать БАРС", callback_data=f'watching_bars_{user_id}'),
+        )
+
+    if used_osep:
+        keyboard.row(
+            InlineKeyboardButton(text="Перестать отслеживать ОСЭП", callback_data=f'dont_watching_osep_{user_id}'),
+        )
+    else:
+        keyboard.row(
+            InlineKeyboardButton(text="Отслеживать ОСЭП", callback_data=f'watching_osep_{user_id}'),
+        )
+    return keyboard.as_markup()

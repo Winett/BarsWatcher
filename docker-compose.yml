@@ -26,8 +26,8 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
-#    volumes:
-#      - bot_data:/app
+    volumes:
+      - bot_sessions:/app/sessions
 
   postgres_admin:
     image: dpage/pgadmin4
@@ -45,4 +45,4 @@ services:
 
 volumes:
   postgres_data:
-#  bot_data:
+  bot_sessions:
