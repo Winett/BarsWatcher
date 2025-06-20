@@ -18,7 +18,7 @@ async def start_command(msg: Message, state: FSMContext, session: sessionmaker):
     user_service = UserService(session)
     notification_service = NotificationService(session)
     if not await user_service.is_exists(msg.from_user.id):
-        await user_service.create(msg.from_user.id)
+        await user_service.create(msg.from_user.id, msg.from_user.username)
         logger.info(f'Появился новый пользователь! '
                     f'user_id = {msg.from_user.id} username = {msg.from_user.username} '
                     f'{msg.from_user.first_name = } {msg.from_user.last_name = }')
