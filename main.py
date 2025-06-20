@@ -15,6 +15,7 @@ from handlers import router as handlers_router
 
 from database.db import init_db
 from middlewares.db import DatabaseMiddleware
+from middlewares.throttling import ThrottlingMiddleware
 
 from services.notification import NotificationService
 from watchers.notificator import Notificator
@@ -70,6 +71,7 @@ async def main():
 
     dp.message.middleware(DatabaseMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
+    dp.update.outer_middleware(ThrottlingMiddleware())
 
 
 
