@@ -6,8 +6,11 @@ from collections import defaultdict
 
 
 class ThrottlingMiddleware(BaseMiddleware):
-    def __init__(self, rate_limit: float = 2.0):
-        self.rate_limit = rate_limit
+    rate_limit: float = 0.6
+
+    def __init__(self, rate_limit: float = None):
+        if rate_limit:
+            self.rate_limit = rate_limit
         self.user_last_request = defaultdict(float)
 
     async def __call__(
