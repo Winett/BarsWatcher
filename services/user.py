@@ -18,9 +18,9 @@ class UserService:
             user = await session.execute(select(User).where(User.user_id == user_id))
             return bool(user.scalar())
 
-    async def create(self, user_id: int) -> None:
+    async def create(self, user_id: int, username: str = None) -> None:
         async with self.session_maker as session:
-            user = User(user_id=user_id)
+            user = User(user_id=user_id, username=username)
             session.add(user)
             await session.commit()
 
