@@ -180,11 +180,14 @@ class OsepNotificator(Notificator):
 
                     media_group.append(InputMediaDocument(media=input_file, filename=filename.name))
 
-
-                a = await self.bot.send_message(
-                    chat_id=target_id,
-                    text=message
-                )
+                a = None
+                for i in range(0, len(message), 4096):
+                    a = await self.bot.send_message(
+                        chat_id=target_id,
+                        text=message[i:i+4096],
+                        reply_to_message_id=a.message_id if a else None
+                    ) # если вдруг письмо большое, то оно будет разбито на несколько частей
+                    await asyncio.sleep(.3)
 
                 for i in range(0, len(files), 10):
                     await self.bot.send_media_group(
@@ -194,7 +197,12 @@ class OsepNotificator(Notificator):
                     )
 
                 return
-            await self.bot.send_message(target_id, message)
+            for i in range(0, len(message), 4096):
+                await self.bot.send_message(
+                    chat_id=target_id,
+                    text=message[i:i+4096],
+                )
+                await asyncio.sleep(.3)
 
         except Exception as e:
             logger.error(f"Ошибка отправки сообщения: {e}")
