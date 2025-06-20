@@ -84,6 +84,7 @@ class Notificator(ABC):
                 error_count = 0
 
             except (ServerError500, LoginError) as e:
+                logger.error(f"Ошибка сервера: {e.__class__.__name__} {e.args} у {self.chat_id} {self.username}")
                 current_time = time.time()
 
                 if last_error_time and (current_time - last_error_time > error_window_seconds):
@@ -99,7 +100,10 @@ class Notificator(ABC):
                         user_id=settings.admins[0])
                     self.stop_watching(self.chat_id)
                     async with async_session() as session:
-                        await UserService(session).set_osep_status_used(self.chat_id, False)
+                        if self.__class__.__name__ == "BarsNotificator":
+                            await UserService(session).set_bars_status_used(self.chat_id, False)
+                        else:
+                            await UserService(session).set_osep_status_used(self.chat_id, False)
                     break
                 await self.notify(f"Ошибка сервера: {e.__class__.__name__} {e.args} у {self.chat_id} {self.username}",
                                   user_id=settings.admins[0])
@@ -111,7 +115,7 @@ class Notificator(ABC):
             await asyncio.sleep(self.timeout_after_error)
 
     async def _handle_watch_error(self, error: Exception):
-        error_msg = f"{self.__class__.__name__} ошибка: {error.__class__.__name__}"
+        error_msg = f"{self.__class__.__name__} ошибка: {error.__class__.__name__} {self.chat_id} {self.username}"
         await self.notify(error_msg, user_id=settings.admin_id[0])
         logger.error(f"{error_msg}: {str(error)}")
 

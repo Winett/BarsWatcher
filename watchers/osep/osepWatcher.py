@@ -48,7 +48,7 @@ class WatcherOsep(BaseAuth):
     def stop(self):
         self.watching = False
 
-    @logger.catch
+    @logger.catch(reraise=True)
     async def watch(self, callback):
 
         self.watching = True
@@ -114,6 +114,10 @@ class WatcherOsep(BaseAuth):
                         logger.info(f"ОБНОВЛЕНО ПИСЬМО: {conv['ConversationTopic']}")
 
                     last_conversations = current_conversations
+
+                except LoginError:
+                    logger.warning(f"Ошибка авторизации: {self.username}")
+                    raise
 
                 except ServerError500 as e:
                     logger.error(f"{self.__class__.__name__} Ошибка в основном цикле watch: {e.__class__.__name__} {e.args} {e}")
