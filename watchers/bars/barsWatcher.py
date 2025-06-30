@@ -28,18 +28,17 @@ class WatcherKM(BaseAuth):
 
     async def login(self) -> bool:
         session = await self.get_session()
-        async with session:
-            if await self._load_session():
-                async with session.get(self.list_student_url, allow_redirects=False) as response:
-                # response = self.session.get(self.list_student_url, allow_redirects=False)  # Проверка авторизации
-                    logger.debug(f"{self.__class__.__name__} Проверка авторизации: {response.status=}")
-                    if response.status == 200:
-                        logger.debug(f"{self.__class__.__name__} -- Авторизация прошла успешно({self.username}) с помощью cookies --")
-                        return True
-                    logger.warning(f"{self.__class__.__name__} -- Ошибка авторизации -- Обновляю куки...")
-            session.cookie_jar.clear()
-            async with session.get(self.login_url, allow_redirects=False) as response:
-                content = await response.read()
+        if await self._load_session():
+            async with session.get(self.list_student_url, allow_redirects=False) as response:
+            # response = self.session.get(self.list_student_url, allow_redirects=False)  # Проверка авторизации
+                logger.debug(f"{self.__class__.__name__} Проверка авторизации: {response.status=}")
+                if response.status == 200:
+                    logger.debug(f"{self.__class__.__name__} -- Авторизация прошла успешно({self.username}) с помощью cookies --")
+                    return True
+                logger.warning(f"{self.__class__.__name__} -- Ошибка авторизации -- Обновляю куки...")
+        session.cookie_jar.clear()
+        async with session.get(self.login_url, allow_redirects=False) as response:
+            content = await response.read()
 
             soup = BeautifulSoup(content, 'html.parser')
             RequestVerificationToken = soup.find('input', {'name': '__RequestVerificationToken'})['value']
@@ -64,17 +63,17 @@ class WatcherKM(BaseAuth):
 
     async def get_student_id(self):
         session = await self.get_session()
-        async with session:
-            async with await session.get(self.list_student_url, allow_redirects=False) as response:
-                content = await response.read()
-            #-----------------
-            soup = BeautifulSoup(content, 'html.parser')
-            # -----------------
-            student_id = soup.find('table', id='tbl__PartialListStudent').find('tbody').find('tr').find('a')['href'].split('?')[-1].split('=')[1]
-            return student_id
+        async with session.get(self.list_student_url, allow_redirects=False) as response:
+            content = await response.read()
+        #-----------------
+        soup = BeautifulSoup(content, 'html.parser')
+        # -----------------
+        student_id = soup.find('table', id='tbl__PartialListStudent').find('tbody').find('tr').find('a')['href'].split('?')[-1].split('=')[1]
+        return student_id
 
     def stop(self):
         self.watching = False
+        self._cleanup()
 
     async def _authenticate(self, session) -> bool:
         try:
@@ -100,24 +99,22 @@ class WatcherKM(BaseAuth):
             return False
 
     @logger.catch(reraise=True)
-    async def watch(self, callback: Optional[Callable[[str], Awaitable[None]]] = None):
+    async def watch(self, callback=None):
         self.watching = True
         last_data: dict[str, DisciplineWatcher] = {}
         session = await self.get_session()
 
-
-        async with session:
-            while self.watching:
-                if session.closed:
-                    logger.warning("-- Сессия закрылась, пеероткрываю --")
-                    session = await self.get_session()
-                try:
-                    async with await session.get(self.summary_url, params={'studentID': self.student_id}, allow_redirects=False) as response:
-                        content = await response.read()
-
-                    soup = BeautifulSoup(content, 'html.parser')
-                    # response = open(r'E:\Documents\PYTHON\BarsCheckerLessons\test.html', 'rb').read()
-                    # soup = BeautifulSoup(response, 'html.parser')
+        while self.watching:
+            if session.closed:
+                logger.warning(f"-- Сессия закрылась, пеероткрываю ({self.username}) --")
+                session = await self.get_session()
+                continue
+            try:
+                async with session.get(self.summary_url, params={'studentID': self.student_id}, allow_redirects=False) as response:
+                    content = await response.read()
+                soup = BeautifulSoup(content, 'html.parser')
+                # response = open(r'E:\Documents\PYTHON\BarsCheckerLessons\test.html', 'rb').read()
+                # soup = BeautifulSoup(response, 'html.parser')
 
                     current_data: dict[str, DisciplineWatcher] = {}
 
