@@ -26,3 +26,24 @@ class DisciplineWatcher(BaseModel):
             changes.append(f"Изменение в {self.discipline}: Количество КМ изменилось: {len(self.marks)} → {len(other.marks)}")
 
         return changes
+
+
+class DisciplineSkip(BaseModel):
+    discipline: str | None = None
+    lessons_in_journal: int = 0
+    skips: int = 0
+    skip_for_good_reasons: int = 0
+    skip_without_reason_percent: float = 0
+    lessons_in_shedule: int = 0
+    skip_without_reason_in_shedule_percent: float = 0
+
+
+    def find_changes(self, other: 'DisciplineSkip'):
+        changes = []
+        if self.discipline != other.discipline:
+            return False
+
+        if self.skips != other.skips:
+            changes.append(f"Изменение в {self.discipline}: Количество пропусков изменилось: {self.skips} → {other.skips} ({self.skip_without_reason_in_shedule_percent}%)")
+
+        return changes
