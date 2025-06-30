@@ -2,10 +2,12 @@ from aiogram import Bot
 from aiogram.types import InputMediaDocument, BufferedInputFile
 
 from loguru import logger
+from aiohttp import ClientSession, ClientTimeout
 
 from watchers.bars.barsWatcher import WatcherKM
 from watchers.osep.osepWatcher import WatcherOsep
 import asyncio
+from aiohttp import ConnectionTimeoutError
 
 from watchers.exceptions import LoginError, ServerError500
 from database.db import async_session
@@ -13,7 +15,7 @@ from services.user import UserService
 
 from settings import settings
 
-from typing import Dict, Optional, TypeVar, Type, Any
+from typing import Dict, Optional, TypeVar, Type, Any, List, ClassVar
 from abc import ABC, abstractmethod
 import time
 
@@ -24,7 +26,15 @@ class Notificator(ABC):
     bot: Optional[Bot] = None
     _instances: Dict[str, Dict[int, 'Notificator']] = {}
 
+    _timeout_errors: Dict[str, Dict[int, List[float]]] = {}  # {class_name: {chat_id: [timestamp1, timestamp2]}}
+    _timeout_threshold = 4  # Максимальное количество таймаутов перед отключением
+    _timeout_window = 300  # Окно времени для подсчета таймаутов (5 минут)
+    _reconnect_delay = 60  # Задержка между проверками восстановления соединения
+    _suspended_instances: Dict[str, list[tuple[int, str, str]]] = {}  # {class_name: [(chat_id, username, password)]}
+
     timeout_after_error = 60
+
+    _connection_check_url: ClassVar[str]
 
     def __init__(self, chat_id: int, username: str, password: str):
         self.chat_id = chat_id
@@ -144,7 +154,101 @@ class Notificator(ABC):
     def get_count_of_instances(cls):
         return len(cls._instances[cls.__class__.__name__])
 
+    ### Обработка ошибки таймаута ###
+    async def _handle_timeout_error(self):
+        class_name = self.__class__.__name__
+        current_time = time.time()
+
+        if class_name not in self._timeout_errors:
+            self._timeout_errors[class_name] = {}
+        if self.chat_id not in self._timeout_errors[class_name]:
+            self._timeout_errors[class_name][self.chat_id] = []
+
+        self._timeout_errors[class_name][self.chat_id].append(current_time)
+
+        recent_errors = [
+            t for t in self._timeout_errors[class_name][self.chat_id]
+            if current_time - t <= self._timeout_window
+        ]
+        self._timeout_errors[class_name][self.chat_id] = recent_errors
+
+        if len(recent_errors) >= self._timeout_threshold:
+            await self._handle_critical_timeout()
+
+    async def _handle_critical_timeout(self):
+        class_name = self.__class__.__name__
+
+        self._suspended_instances[class_name] = [
+            (inst.chat_id, inst.username, inst.password)
+            for inst in self._instances.get(class_name, {}).values()
+        ]
+
+        msg = f"Критическое количество таймаутов соединения ({self._timeout_threshold} за {self._timeout_window} сек). Отключаю все вотчеры {class_name}."
+        await self.notify(msg, user_id=settings.admins[0])
+        logger.error(msg)
+
+        self.stop_all()
+
+        asyncio.create_task(self._monitor_connection_recovery())
+
+    async def _monitor_connection_recovery(self):
+        class_name = self.__class__.__name__
+        logger.info(f"Начало мониторинга восстановления соединения для {class_name}")
+
+        while True:
+            try:
+                if await self.test_connection():
+                    logger.info(f"Соединение восстановлено для {class_name}")
+                    await self._restart_all_instances()
+                    break
+
+            except Exception as e:
+                logger.debug(f"Соединение еще не восстановлено: {e}")
+
+            await asyncio.sleep(self._reconnect_delay)
+
+    async def _restart_all_instances(self):
+        class_name = self.__class__.__name__
+
+        for chat_id, username, password in self._suspended_instances.get(class_name, []):
+            try:
+                new_instance = self.__class__(
+                    chat_id=chat_id,
+                    username=username,
+                    password=password
+                )
+                new_instance.bot = self.bot
+
+                if await new_instance.start_watching():
+                    logger.info(f"Успешно перезапущен вотчер для {chat_id}")
+                    await new_instance.notify("Мониторинг автоматически возобновлен после восстановления соединения")
+                else:
+                    logger.error(f"Не удалось перезапустить вотчер для {chat_id}")
+
+            except Exception as e:
+                logger.error(f"Ошибка при перезапуске вотчера {chat_id}: {e}")
+
+    def _clear_timeout_errors(self):
+        class_name = self.__class__.__name__
+        if class_name in self._timeout_errors and self.chat_id in self._timeout_errors[class_name]:
+            del self._timeout_errors[class_name][self.chat_id]
+
+    @classmethod
+    async def test_connection(cls):
+        session = ClientSession(timeout=ClientTimeout(total=10))
+        try:
+            async with session.get(url=cls._connection_check_url, allow_redirects=False) as response:
+                return response.status == 200
+        except Exception as e:
+            logger.error(f"Ошибка соединения: {e}")
+            return False
+        finally:
+            await session.close()
+
+    ### Конец логики обработки ошибки таймаута ###
+
 class BarsNotificator(Notificator):
+    _connection_check_url = "https://bars.mpei.ru/bars_web/"
 
     def __init__(self, chat_id: int, username: str, password: str):
         super().__init__(chat_id, username, password)
@@ -157,6 +261,7 @@ class BarsNotificator(Notificator):
         self.watcher.student_id = await self.watcher.get_student_id()
 
 class OsepNotificator(Notificator):
+    _connection_check_url = "https://mail.mpei.ru/CookieAuth.dll?GetLogon?curl=Z2F&reason=0&formdir=2"
 
     def __init__(self, chat_id: int, username: str, password: str):
         super().__init__(chat_id, username, password)
