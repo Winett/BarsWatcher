@@ -25,10 +25,13 @@ class BaseAuth:
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            await self._load_session() or await self._create_session()
+            await self._create_session()
+            await self._load_session()
         return self._session
 
     async def _create_session(self) -> aiohttp.ClientSession:
+        if self._session and not self._session.closed:
+            await self._session.close()
         self._session = aiohttp.ClientSession()
         return self._session
 
@@ -47,14 +50,18 @@ class BaseAuth:
 
         try:
             cookies = json.loads(self._session_file.read_text())
-            self._session = aiohttp.ClientSession()
             self._session.cookie_jar.update_cookies(cookies)
             return True
         except Exception as e:
             logger.warning(f"Ошибка загрузки сессии: {e}")
             return False
 
+    def _cleanup(self):
+        if self._session and not self._session.closed:
+            asyncio.create_task(self.close())
+
     async def close(self):
         if self._session and not self._session.closed:
             await self._save_session()
             await self._session.close()
+            self._session = None
