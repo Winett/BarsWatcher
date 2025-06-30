@@ -14,15 +14,15 @@ class DisciplineWatcher(BaseModel):
 
         for i, (old_mark, new_mark) in enumerate(zip(self.marks, other.marks)):
             if old_mark != new_mark:
-                changes.append(f"КМ-{i + 1}: {old_mark} → {new_mark}")
+                changes.append(f"Изменение в {self.discipline}: КМ-{i + 1}: {old_mark} → {new_mark}")
 
         if self.mark_PA != other.mark_PA:
-            changes.append(f"ПА: {self.mark_PA} → {other.mark_PA}")
+            changes.append(f"Изменение в {self.discipline}: ПА: {self.mark_PA} → {other.mark_PA}")
 
         if self.mark_final != other.mark_final:
-            changes.append(f"Итоговая оценка: {self.mark_final} → {other.mark_final}")
+            changes.append(f"Изменение в {self.discipline}: Итоговая оценка: {self.mark_final} → {other.mark_final}")
 
         if len(self.marks) != len(other.marks):
-            changes.append(f"Количество КМ изменилось: {len(self.marks)} → {len(other.marks)}")
+            changes.append(f"Изменение в {self.discipline}: Количество КМ изменилось: {len(self.marks)} → {len(other.marks)}")
 
         return changes
