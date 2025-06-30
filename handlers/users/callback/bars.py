@@ -79,7 +79,8 @@ async def watching_bars_command(msg: CallbackQuery, state: FSMContext, session: 
     user_service = UserService(session)
     login = await user_service.get_bars_login(msg.from_user.id)
     password = await user_service.get_bars_password(msg.from_user.id)
-
+    if not (await BarsNotificator(msg.from_user.id, login, password).start_watching()):
+        return
     await user_service.set_bars_status_used(msg.from_user.id, True)
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание БАРСа!')
     # await msg.message.answer('Уведомления о БАРСе включены!')
