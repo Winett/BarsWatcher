@@ -202,11 +202,88 @@ class WatcherKM(BaseAuth):
             for change in changes:
                 yield change
 
+    @staticmethod
+    def get_marks_for_automat(current_marks, weights, count_of_marks):
+        """
 
-                    last_data = current_data
+        :param current_marks: Текущие оценки ученика
+        :param weights: Все вес оценок, как новых, так и уже имеющихся
+        :param count_of_marks: Общее количество оценок
+        :return: Все возможные комбинации оценок, при которых возможен автомат
+        """
+        from itertools import product
 
-                except Exception as e:
-                    logger.error(f"Ошибка: {e.__class__.__name__}: {e.args}")
+        new_marks = []
 
-                finally:
-                    await sleep(self.timeout)
+        for marks in product([0, 2, 3, 4, 5], repeat=count_of_marks - len(current_marks)):
+            probably_marks = current_marks + list(marks)
+            average_mark = sum([mark * weight for mark, weight in zip(probably_marks, weights)]) / sum(weights)
+            if round(average_mark, 2) >= 4.2:
+                new_marks.append((marks, average_mark))
+
+        return new_marks
+    @staticmethod
+    def generate_message_for_marks_to_automat(content):
+        message = ""
+        soup = BeautifulSoup(content, 'html.parser')
+        for lesson in soup.find_all('div', class_='my-2'):
+            discipline = ", ".join(lesson.text.strip().split(', ')[:3])
+            KMs = []
+            for tr in soup.find("div", id=lesson.find('a').get('href')[1:]).find_all('tr')[1:]:
+                KM = []
+                if re.search(r'\d+\.', tr.find('td').text):
+                    for td in tr.find_all('td'):
+                        KM.append(td.text.strip())
+                    KMs.append(KM)
+
+            message += f"{discipline}\n"
+
+            marks_now = []
+            weights_existing = []
+            weights_missing = []
+
+            for KM in KMs:
+                weight = int(KM[1])
+                mark = KM[-1].split()[0] if KM[-1] else None
+
+                if mark:
+                    marks_now.append(int(mark))
+                    weights_existing.append(weight)
+                else:
+                    weights_missing.append(weight)
+
+            weights = weights_existing + weights_missing
+
+            message += f"Текущие оценки: {', '.join(map(str, marks_now))}\n" if marks_now else ""
+
+            if len(marks_now) == len(weights_existing + weights_missing):
+                if sum(marks_now) / len(marks_now) >= 4.2:
+                    message += 'Поздравляю с получением автомата!!!\n'
+                message += '\n\n'
+                continue
+
+            message += 'Для получения автомата нужно получить любую из следующих оценок: \n'
+            message += '<blockquote expandable>'
+            for marks, average_mark in WatcherKM.get_marks_for_automat(marks_now, weights, len(weights)):
+                message += f"{', '.join([str(mark) for mark in marks])} ({average_mark})\n"
+            message += '</blockquote>\n'
+            message += '\n\n'
+        return message
+    @logger.catch
+    async def marks_automat(self, callback):
+        session = await self.get_session()
+        params = {
+                'studentId': await self.get_student_id(),
+                'query': json.dumps({
+                    "ID": await self.get_student_id(),
+                    "FilterSemester": {
+                        "Value": str(datetime.now().year % 100) if datetime.now().month < 9 else str((datetime.now().year + 1) % 100),
+                    }
+                })
+            }
+
+        async with session.get("https://bars.mpei.ru/bars_web/ST_Study/Student_SemesterSheet/_PartialListStudent_SemesterSheet__Mark", allow_redirects=False, params=params) as response:
+            content = await response.read()
+        message = self.generate_message_for_marks_to_automat(content)
+        await callback(message)
+
