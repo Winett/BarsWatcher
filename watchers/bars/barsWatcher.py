@@ -1,12 +1,16 @@
 from asyncio import sleep
 from typing import Optional, Callable, Awaitable
+from datetime import datetime
+import re
+import json
 
+from aiohttp import ConnectionTimeoutError, ClientSession, ClientTimeout, ClientConnectorError
 from bs4 import BeautifulSoup
 from loguru import logger
 
 from watchers.base import BaseAuth
 from watchers.exceptions import LoginError
-from watchers.bars.barsmodel import DisciplineWatcher
+from watchers.bars.barsmodel import DisciplineWatcher, DisciplineSkip
 from settings import settings
 
 
@@ -53,10 +57,11 @@ class WatcherKM(BaseAuth):
             async with session.post(self.login_url, data=data) as response:
                 pass
 
-            if session.cookie_jar.filter_cookies(self.login_url).get('auth_bars'):
-                self._session = session
-                await self._save_session()
-                return True
+        if session.cookie_jar.filter_cookies(self.login_url).get('auth_bars'):
+            logger.debug(f"{self.__class__.__name__} -- Авторизация прошла успешно({self.username}) с помощью пароля --")
+            self._session = session
+            await self._save_session()
+            return True
 
             logger.error(f"{self.__class__.__name__} -- Ошибка авторизации -- Неверные учетные данные")
             raise LoginError("-- Ошибка авторизации --")
@@ -102,6 +107,7 @@ class WatcherKM(BaseAuth):
     async def watch(self, callback=None):
         self.watching = True
         last_data: dict[str, DisciplineWatcher] = {}
+        last_skip_data: dict[str, DisciplineSkip] = {}
         session = await self.get_session()
 
         while self.watching:
@@ -116,32 +122,86 @@ class WatcherKM(BaseAuth):
                 # response = open(r'E:\Documents\PYTHON\BarsCheckerLessons\test.html', 'rb').read()
                 # soup = BeautifulSoup(response, 'html.parser')
 
-                    current_data: dict[str, DisciplineWatcher] = {}
+                current_data: dict[str, DisciplineWatcher] = self.get_new_data_marks(soup)
 
-                    for tr in soup.find('table', id='tableMarkSummary').find('tbody').find_all('tr'):
-                        if tr.get('class') and tr['class'][0] == "summary-header-min":
-                            continue
+                for change in self.find_changes(last_data, current_data):
+                    if callback:
+                        await callback(change)
+                        continue
+                    logger.info(change)
 
-                        discipline = tr.find('td', {'class': 'summary-td-row-header'}).text.strip()
-                        marks = [
-                            int(td.text)
-                            for td in tr.find_all('span', {'class': 'summary-mark'})
-                            if td.text.strip()
-                        ]
-                        mark_PA, mark_final = tr.find_all('td')[-2:]
-                        mark_PA = mark_PA.text.strip()
-                        mark_final = mark_final.text.strip()
-                        current_data[discipline] = DisciplineWatcher(discipline=discipline, marks=marks, mark_PA=mark_PA, mark_final=mark_final)
+                last_data = current_data
 
-                    for discipline, new_discipline_data in current_data.items():
-                        if not last_data:
-                            break
-                        changes = last_data[discipline].find_changes(new_discipline_data)
-                        for change in changes:
-                            if callback:
-                                await callback(f"Изменение в {discipline}: {change}")
-                                continue
-                            logger.info(f"Изменение в {discipline}: {change}")
+                new_skip_data: dict[str, DisciplineSkip] = self.get_new_data_skip(soup)
+
+                for change in self.find_changes(last_skip_data, new_skip_data):
+                    if callback:
+                        await callback(change)
+                        continue
+                    logger.info(change)
+
+                    last_skip_data = new_skip_data
+            except ConnectionTimeoutError:
+                logger.error(f"{self.__class__.__name__} Ошибка соединения TimeoutError ({self.username})")
+                await callback(f"{self.__class__.__name__} Ошибка соединения TimeoutError ({self.username})", user_id=settings.admins[0])
+                raise
+
+            except Exception as e:
+                logger.error(f"Ошибка: {e.__class__.__name__}: {e.args}")
+
+            finally:
+                await sleep(self.timeout)
+
+
+    @staticmethod
+    def get_new_data_marks(soup) -> dict[str, DisciplineWatcher]:
+        current_data: dict[str, DisciplineWatcher] = {}
+
+        for tr in soup.find('table', id='tableMarkSummary').find('tbody').find_all('tr'):
+            if tr.get('class') and tr['class'][0] == "summary-header-min":
+                continue
+
+            discipline = tr.find('td', {'class': 'summary-td-row-header'}).text.strip()
+            marks = [
+                int(td.text)
+                for td in tr.find_all('span', {'class': 'summary-mark'})
+                if td.text.strip()
+            ]
+            mark_PA, mark_final = tr.find_all('td')[-2:]
+            mark_PA = mark_PA.text.strip()
+            mark_final = mark_final.text.strip()
+            current_data[discipline] = DisciplineWatcher(discipline=discipline, marks=marks, mark_PA=mark_PA, mark_final=mark_final)
+
+        return current_data
+
+    @staticmethod
+    def get_new_data_skip(soup) -> dict[str, DisciplineSkip]:
+        current_data: dict[str, DisciplineSkip] = {}
+
+        for tr in soup.find('table', id='tableSkipSummary').find('tbody').find_all('tr')[:-1]:
+            if tr.get('class') and tr['class'][0] == "summary-header-min":
+                continue
+
+            discipline = tr.find('td', {'class': 'summary-td-row-header'}).text.strip()
+            lessons_in_journal = int(tr.find_all('td')[1].text.strip())
+            skips = int(tr.find_all('td')[2].text.strip())
+            skip_for_good_reasons = int(tr.find_all('td')[3].text.strip())
+            skip_without_reason_percent = float(tr.find_all('td')[4].text.strip().replace(',', '.'))
+            lessons_in_shedule = int(tr.find_all('td')[5].text.strip())
+            skip_without_reason_in_shedule_percent = float(tr.find_all('td')[6].text.strip().replace(',', '.'))
+            current_data[discipline] = DisciplineSkip(discipline=discipline, skips=skips, lessons_in_journal=lessons_in_journal, skip_for_good_reasons=skip_for_good_reasons, skip_without_reason_percent=skip_without_reason_percent, lessons_in_shedule=lessons_in_shedule, skip_without_reason_in_shedule_percent=skip_without_reason_in_shedule_percent)
+
+        return current_data
+
+    @staticmethod
+    def find_changes(old_data, new_data):
+        for discipline, new_discipline_data in new_data.items():
+            if not old_data:
+                break
+            changes = old_data[discipline].find_changes(new_discipline_data)
+            for change in changes:
+                yield change
+
 
                     last_data = current_data
 
