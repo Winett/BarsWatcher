@@ -44,18 +44,18 @@ class WatcherKM(BaseAuth):
         async with session.get(self.login_url, allow_redirects=False) as response:
             content = await response.read()
 
-            soup = BeautifulSoup(content, 'html.parser')
-            RequestVerificationToken = soup.find('input', {'name': '__RequestVerificationToken'})['value']
+        soup = BeautifulSoup(content, 'html.parser')
+        RequestVerificationToken = soup.find('input', {'name': '__RequestVerificationToken'})['value']
 
-            data = {
-                "__RequestVerificationToken": RequestVerificationToken,
-                "StopOpenDefault": False,
-                "Account": self.username,
-                "Password": self.password,
-                "RememberMe": True
-            }
-            async with session.post(self.login_url, data=data) as response:
-                pass
+        data = {
+            "__RequestVerificationToken": RequestVerificationToken,
+            "StopOpenDefault": False,
+            "Account": self.username,
+            "Password": self.password,
+            "RememberMe": True
+        }
+        async with session.post(self.login_url, data=data) as response:
+            pass
 
         if session.cookie_jar.filter_cookies(self.login_url).get('auth_bars'):
             logger.debug(f"{self.__class__.__name__} -- Авторизация прошла успешно({self.username}) с помощью пароля --")
@@ -63,8 +63,8 @@ class WatcherKM(BaseAuth):
             await self._save_session()
             return True
 
-            logger.error(f"{self.__class__.__name__} -- Ошибка авторизации -- Неверные учетные данные")
-            raise LoginError("-- Ошибка авторизации --")
+        logger.error(f"{self.__class__.__name__} -- Ошибка авторизации -- Неверные учетные данные")
+        raise LoginError("-- Ошибка авторизации --")
 
     async def get_student_id(self):
         session = await self.get_session()
