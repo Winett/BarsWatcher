@@ -126,7 +126,7 @@ class Notificator(ABC):
 
     async def _handle_watch_error(self, error: Exception):
         error_msg = f"{self.__class__.__name__} ошибка: {error.__class__.__name__} {self.chat_id} {self.username}"
-        await self.notify(error_msg, user_id=settings.admin_id[0])
+        await self.notify(error_msg, user_id=settings.admins[0])
         logger.error(f"{error_msg}: {str(error)}")
 
     @classmethod
