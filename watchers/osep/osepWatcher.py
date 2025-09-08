@@ -287,8 +287,11 @@ class WatcherOsep(BaseAuth):
                     msg = await self._format_message(conv)
                     files = []
                     if conv['HasAttachments']:
-                        files = await self.get_attachment_ids(conv['ConversationId']['Id'])
-                        msg += "\nЕсть вложения!"
+                        try:
+                            files = await self.get_attachment_ids(conv['ConversationId']['Id'])
+                            msg += "\nЕсть вложения!"
+                        except Exception:
+                            msg += f'\nВ письме есть вложения, но не удалось их получить; Проверьте документы на ОСЭП'
                     logger.debug(f"Отправка нового письма пользователю {self.username}")
                     await callback(msg, files=files)
                     logger.debug(f"Письмо пользователю {self.username} успешно отправлено")
