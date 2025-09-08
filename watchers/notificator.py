@@ -117,6 +117,8 @@ class Notificator(ABC):
                     break
                 await self.notify(f"Ошибка сервера: {e.__class__.__name__} {e.args} у {self.chat_id} {self.username}",
                                   user_id=settings.admins[0])
+            except ConnectionTimeoutError:
+                logger.error(f"{self.__class__.__name__} | {self.username} | ConnectionTimeoutError")
 
             except Exception as e:
                 await self._handle_watch_error(e)
