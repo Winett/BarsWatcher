@@ -34,7 +34,6 @@ class WatcherKM(BaseAuth):
         session = await self.get_session()
         if await self._load_session():
             async with session.get(self.list_student_url, allow_redirects=False) as response:
-            # response = self.session.get(self.list_student_url, allow_redirects=False)  # Проверка авторизации
                 logger.debug(f"{self.__class__.__name__} Проверка авторизации: {response.status=}")
                 if response.status == 200:
                     logger.debug(f"{self.__class__.__name__} -- Авторизация прошла успешно({self.username}) с помощью cookies --")
@@ -183,12 +182,32 @@ class WatcherKM(BaseAuth):
                 continue
 
             discipline = tr.find('td', {'class': 'summary-td-row-header'}).text.strip()
-            lessons_in_journal = int(tr.find_all('td')[1].text.strip())
-            skips = int(tr.find_all('td')[2].text.strip())
-            skip_for_good_reasons = int(tr.find_all('td')[3].text.strip())
-            skip_without_reason_percent = float(tr.find_all('td')[4].text.strip().replace(',', '.'))
-            lessons_in_shedule = int(tr.find_all('td')[5].text.strip())
-            skip_without_reason_in_shedule_percent = float(tr.find_all('td')[6].text.strip().replace(',', '.'))
+            try:
+                lessons_in_journal = int(tr.find_all('td')[1].text.strip())
+            except ValueError:
+                lessons_in_journal = 0
+            try:
+                skips = int(tr.find_all('td')[2].text.strip())
+            except ValueError:
+                skips = 0
+            try:
+                skip_for_good_reasons = int(tr.find_all('td')[3].text.strip())
+            except ValueError:
+                skip_for_good_reasons = 0
+            try:
+                skip_without_reason_percent = float(tr.find_all('td')[4].text.strip().replace(',', '.'))
+            except ValueError:
+                skip_without_reason_percent = 0
+
+            try:
+                lessons_in_shedule = int(tr.find_all('td')[5].text.strip())
+            except ValueError:
+                lessons_in_shedule = 0
+            try:
+                skip_without_reason_in_shedule_percent = float(tr.find_all('td')[6].text.strip().replace(',', '.'))
+            except ValueError:
+                skip_without_reason_in_shedule_percent = 0
+
             current_data[discipline] = DisciplineSkip(discipline=discipline, skips=skips, lessons_in_journal=lessons_in_journal, skip_for_good_reasons=skip_for_good_reasons, skip_without_reason_percent=skip_without_reason_percent, lessons_in_shedule=lessons_in_shedule, skip_without_reason_in_shedule_percent=skip_without_reason_in_shedule_percent)
 
         return current_data
