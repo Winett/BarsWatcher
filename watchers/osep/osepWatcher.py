@@ -34,7 +34,7 @@ class WatcherOsep(BaseAuth):
             logger.info(f"-- Авторизация с помощью cookies({self.username}) --")
             return True
         session.cookie_jar.clear()
-        async with session.post(self.login_url, data={'curl': 'Z2FowaZ2F', 'flags': 0, 'forcedownlevel': 0, 'formdir': 2, 'username': self.username, 'password': self.password, 'isUtf8': 1, 'trusted': 4}, allow_redirects=False):
+        async with session.post(self.login_url, data={'curl': 'Z2FowaZ2F', 'flags': 0, 'forcedownlevel': 0, 'formdir': 2, 'username': self.username, 'password': self.password, 'isUtf8': 1, 'trusted': 4}, allow_redirects=False, ssl=False):
             pass
         if await self.check_auth(session):
             logger.info(f"{self.__class__.__name__}-- Авторизация с помощью пароля({self.username}) --")
@@ -46,7 +46,7 @@ class WatcherOsep(BaseAuth):
         raise LoginError(f"Неверные данные для входа: {self.username}")
 
     async def check_auth(self, session) -> bool:
-        async with session.post(self.mails_url, allow_redirects=False) as response:
+        async with session.post(self.mails_url, allow_redirects=False, ssl=False) as response:
             return response.status == 200
 
     def stop(self):
@@ -185,6 +185,7 @@ class WatcherOsep(BaseAuth):
                 async with session.request(
                         method,
                         url,
+                        ssl=False,
                         **kwargs
                 ) as response:
 
@@ -216,7 +217,8 @@ class WatcherOsep(BaseAuth):
         async with session.post(
                 self.find_conversation_url,
                 allow_redirects=False,
-                json=self.generate_find_conversation_payload()
+                json=self.generate_find_conversation_payload(),
+                ssl=False
         ) as response:
             if response.status == 401:
                 logger.warning(f"-- Сессия устарела, выполняем перелогин ({self.username}) --")
@@ -287,8 +289,11 @@ class WatcherOsep(BaseAuth):
                     msg = await self._format_message(conv)
                     files = []
                     if conv['HasAttachments']:
-                        files = await self.get_attachment_ids(conv['ConversationId']['Id'])
-                        msg += "\nЕсть вложения!"
+                        try:
+                            files = await self.get_attachment_ids(conv['ConversationId']['Id'])
+                            msg += "\nЕсть вложения!"
+                        except Exception:
+                            msg += f'\nВ письме есть вложения, но не удалось их получить; Проверьте документы на ОСЭП'
                     logger.debug(f"Отправка нового письма пользователю {self.username}")
                     await callback(msg, files=files)
                     logger.debug(f"Письмо пользователю {self.username} успешно отправлено")

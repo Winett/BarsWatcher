@@ -117,6 +117,8 @@ class Notificator(ABC):
                     break
                 await self.notify(f"Ошибка сервера: {e.__class__.__name__} {e.args} у {self.chat_id} {self.username}",
                                   user_id=settings.admins[0])
+            except ConnectionTimeoutError:
+                logger.error(f"{self.__class__.__name__} | {self.username} | ConnectionTimeoutError")
 
             except Exception as e:
                 await self._handle_watch_error(e)
@@ -126,7 +128,7 @@ class Notificator(ABC):
 
     async def _handle_watch_error(self, error: Exception):
         error_msg = f"{self.__class__.__name__} ошибка: {error.__class__.__name__} {self.chat_id} {self.username}"
-        await self.notify(error_msg, user_id=settings.admin_id[0])
+        await self.notify(error_msg, user_id=settings.admins[0])
         logger.error(f"{error_msg}: {str(error)}")
 
     @classmethod

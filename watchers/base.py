@@ -19,7 +19,7 @@ class BaseAuth:
             f"session_{self.__class__.__name__}_{self.username}_{sha256((username + password).encode()).hexdigest()}.json")
         # self.logged_in = self.login()
 
-        atexit.register(self._save_session)
+        atexit.register(asyncio.create_task, self._save_session)
 
     async def login(self) -> bool:
         raise NotImplementedError
