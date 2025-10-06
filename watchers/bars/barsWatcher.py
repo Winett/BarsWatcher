@@ -122,22 +122,23 @@ class WatcherKM(BaseAuth):
                 # soup = BeautifulSoup(response, 'html.parser')
 
                 current_data: dict[str, DisciplineWatcher] = self.get_new_data_marks(soup)
-
                 for change in self.find_changes(last_data, current_data):
+                    logger.info(f"{self.__class__.__name__} ({self.username}) -- {change}")
                     if callback:
                         await callback(change)
                         continue
-                    logger.info(change)
+                    # logger.info(change)
 
                 last_data = current_data
 
                 new_skip_data: dict[str, DisciplineSkip] = self.get_new_data_skip(soup)
 
                 for change in self.find_changes(last_skip_data, new_skip_data):
+                    logger.info(f"{self.__class__.__name__} ({self.username}) -- {change}")
                     if callback:
                         await callback(change)
                         continue
-                    logger.info(change)
+                    # logger.info(change)
 
                     last_skip_data = new_skip_data
             except ConnectionTimeoutError:
@@ -160,11 +161,12 @@ class WatcherKM(BaseAuth):
             if tr.get('class') and tr['class'][0] == "summary-header-min":
                 continue
 
-            discipline = tr.find('td', {'class': 'summary-td-row-header'}).text.strip()
+            discipline = tr.find('td', {'class': 'summary-td-row-header'}).text.strip().split("\r\n")[0]
             marks = [
-                int(td.text)
+                td.text.strip()
+                # int(td.text)
                 for td in tr.find_all('span', {'class': 'summary-mark'})
-                if td.text.strip()
+                # if td.text.strip()
             ]
             mark_PA, mark_final = tr.find_all('td')[-2:]
             mark_PA = mark_PA.text.strip()
@@ -217,9 +219,12 @@ class WatcherKM(BaseAuth):
         for discipline, new_discipline_data in new_data.items():
             if not old_data:
                 break
-            changes = old_data[discipline].find_changes(new_discipline_data)
-            for change in changes:
-                yield change
+            if not discipline in old_data:
+                yield [f"Добавлена новая дисциплина: {discipline}"]
+            else:
+                changes = old_data[discipline].find_changes(new_discipline_data)
+                for change in changes:
+                    yield change
 
     @staticmethod
     def get_marks_for_automat(current_marks, weights, count_of_marks):
