@@ -219,9 +219,12 @@ class WatcherKM(BaseAuth):
         for discipline, new_discipline_data in new_data.items():
             if not old_data:
                 break
-            changes = old_data[discipline].find_changes(new_discipline_data)
-            for change in changes:
-                yield change
+            if not discipline in old_data:
+                yield [f"Добавлена новая дисциплина: {discipline}"]
+            else:
+                changes = old_data[discipline].find_changes(new_discipline_data)
+                for change in changes:
+                    yield change
 
     @staticmethod
     def get_marks_for_automat(current_marks, weights, count_of_marks):
