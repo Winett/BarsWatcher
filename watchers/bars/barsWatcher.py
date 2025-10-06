@@ -122,22 +122,23 @@ class WatcherKM(BaseAuth):
                 # soup = BeautifulSoup(response, 'html.parser')
 
                 current_data: dict[str, DisciplineWatcher] = self.get_new_data_marks(soup)
-
                 for change in self.find_changes(last_data, current_data):
+                    logger.info(f"{self.__class__.__name__} ({self.username}) -- {change}")
                     if callback:
                         await callback(change)
                         continue
-                    logger.info(change)
+                    # logger.info(change)
 
                 last_data = current_data
 
                 new_skip_data: dict[str, DisciplineSkip] = self.get_new_data_skip(soup)
 
                 for change in self.find_changes(last_skip_data, new_skip_data):
+                    logger.info(f"{self.__class__.__name__} ({self.username}) -- {change}")
                     if callback:
                         await callback(change)
                         continue
-                    logger.info(change)
+                    # logger.info(change)
 
                     last_skip_data = new_skip_data
             except ConnectionTimeoutError:
