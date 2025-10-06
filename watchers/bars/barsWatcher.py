@@ -161,11 +161,12 @@ class WatcherKM(BaseAuth):
             if tr.get('class') and tr['class'][0] == "summary-header-min":
                 continue
 
-            discipline = tr.find('td', {'class': 'summary-td-row-header'}).text.strip()
+            discipline = tr.find('td', {'class': 'summary-td-row-header'}).text.strip().split("\r\n")[0]
             marks = [
-                int(td.text)
+                td.text.strip()
+                # int(td.text)
                 for td in tr.find_all('span', {'class': 'summary-mark'})
-                if td.text.strip()
+                # if td.text.strip()
             ]
             mark_PA, mark_final = tr.find_all('td')[-2:]
             mark_PA = mark_PA.text.strip()
