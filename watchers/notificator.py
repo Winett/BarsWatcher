@@ -53,14 +53,16 @@ class Notificator(ABC):
     def _create_watcher(self):
         pass
 
-    async def notify(self, message: str, *, user_id: Optional[int] = None, **kwargs):
+    async def notify(self, message: str, *, user_id: Optional[int] = None, **kwargs) -> bool:
         if not self.bot:
             raise ValueError("Bot instance not set")
         target_id = user_id or self.chat_id
         try:
             await self.bot.send_message(target_id, message)
+            return True
         except Exception as e:
             logger.error(f"Ошибка отправки сообщения: {e}")
+            return False
 
     async def start_watching(self) -> bool:
         try:
@@ -271,7 +273,7 @@ class OsepNotificator(Notificator):
     def _create_watcher(self):
         return WatcherOsep(self.username, self.password)
 
-    async def notify(self, message: str, *, user_id: Optional[int] = None, **kwargs):
+    async def notify(self, message: str, *, user_id: Optional[int] = None, **kwargs) -> bool:
         if not self.bot:
             raise ValueError("Bot instance not set")
         target_id = user_id or self.chat_id
@@ -293,7 +295,7 @@ class OsepNotificator(Notificator):
                         chat_id=target_id,
                         text=message[i:i+4096],
                         reply_to_message_id=a.message_id if a else None
-                    ) # если вдруг письмо большое, то оно будет разбито на несколько частей
+                    ) # если вдруг письмо большое, то оно будет разбито на несколько частей
                     await asyncio.sleep(.3)
 
                 for i in range(0, len(files), 10):
@@ -303,13 +305,15 @@ class OsepNotificator(Notificator):
                         reply_to_message_id=a.message_id
                     )
 
-                return
+                return True
             for i in range(0, len(message), 4096):
                 await self.bot.send_message(
                     chat_id=target_id,
                     text=message[i:i+4096],
                 )
                 await asyncio.sleep(.3)
+            return True
 
         except Exception as e:
             logger.error(f"Ошибка отправки сообщения: {e}")
+            return False

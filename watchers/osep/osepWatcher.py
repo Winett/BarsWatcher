@@ -295,8 +295,13 @@ class WatcherOsep(BaseAuth):
                         except Exception:
                             msg += f'\nВ письме есть вложения, но не удалось их получить; Проверьте документы на ОСЭП'
                     logger.debug(f"Отправка нового письма пользователю {self.username}")
-                    await callback(msg, files=files)
-                    logger.debug(f"Письмо пользователю {self.username} успешно отправлено")
+                    send_success = await callback(msg, files=files)
+                    
+                    if send_success:
+                        logger.debug(f"Письмо пользователю {self.username} успешно отправлено")
+                    else:
+                        await callback("❌ Новое письмо пришло, но произошла ошибка при отправке уведомления. Проверьте ОСЭП")
+                        logger.warning(f"Не удалось отправить письмо пользователю {self.username}")
                 except Exception as e:
                     await self._handle_message_error(e, conv, callback)
 
