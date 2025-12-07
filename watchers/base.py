@@ -33,7 +33,7 @@ class BaseAuth:
     async def _create_session(self) -> aiohttp.ClientSession:
         if self._session and not self._session.closed:
             await self._session.close()
-        self._session = aiohttp.ClientSession()
+        self._session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False))
         return self._session
 
     async def _save_session(self):
