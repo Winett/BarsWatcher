@@ -190,12 +190,12 @@ class WatcherOsep(BaseAuth):
                 ) as response:
 
                     if response.status == 401:
-                        logger.warning(f"Сессия устарела, выполняем перелогин ({self.username})")
+                        logger.warning(f"{self.__class__.__name__} Сессия устарела, выполняем перелогин ({self.username})")
                         await self.login()
                         continue
 
                     if response.status == 500:
-                        logger.error(f"Ошибка сервера 500 ({self.username})")
+                        logger.error(f"{self.__class__.__name__} Ошибка сервера 500 ({self.username})")
                         raise ServerError500(f"Ошибка сервера при запросе к {url}")
 
                     if 'application/json' in response.headers.get('Content-Type', ''):
@@ -221,13 +221,13 @@ class WatcherOsep(BaseAuth):
                 ssl=False
         ) as response:
             if response.status == 401:
-                logger.warning(f"-- Сессия устарела, выполняем перелогин ({self.username}) --")
+                logger.warning(f"{self.__class__.__name__}-- Сессия устарела, выполняем перелогин ({self.username}) --")
                 await self.login()
                 await sleep(5)
                 return await self._get_conversations(session)
 
             if response.status == 500:
-                logger.warning(f"-- Ошибка сервера ({self.username}) --")
+                logger.warning(f"{self.__class__.__name__}-- Ошибка сервера ({self.username}) --")
                 raise ServerError500("-- Ошибка сервера --")
 
             try:
@@ -261,12 +261,12 @@ class WatcherOsep(BaseAuth):
         soup = BeautifulSoup(html_content, 'html.parser')
         txt = soup.text.strip()
 
-        for a in soup.find_all('a'):
-            attrs = a.attrs
-            link_text = a.get_text(strip=True)
-            attrs_str = ' '.join([f'{k}="{v}"' for k, v in attrs.items()])
-            new_a_tag = f'<a {attrs_str}>{link_text}</a>'
-            txt = txt.replace(a.text, new_a_tag, 1)
+        # for a in soup.find_all('a'):
+        #     attrs = a.attrs
+        #     link_text = a.get_text(strip=True)
+        #     attrs_str = ' '.join([f'{k}="{v}"' for k, v in attrs.items()])
+        #     new_a_tag = f'<a {attrs_str}>{link_text}</a>'
+        #     txt = txt.replace(a.text, new_a_tag, 1)
 
         return txt
 
@@ -310,7 +310,7 @@ class WatcherOsep(BaseAuth):
         while self.watching:
             try:
                 if session.closed:
-                    logger.warning(f"-- Сессия закрылась, пеероткрываю ({self.username}) --")
+                    logger.warning(f"{self.__class__.__name__}-- Сессия закрылась, пеероткрываю ({self.username}) --")
                     session = await self.get_session()
                     continue
 
@@ -332,7 +332,7 @@ class WatcherOsep(BaseAuth):
                 last_total_conversations = current_data['Body']['TotalConversationsInView']
                 last_conversations = current_conversations
             except LoginError:
-                logger.warning(f"Ошибка авторизации: {self.username}")
+                logger.warning(f"{self.__class__.__name__} Ошибка авторизации: {self.username}")
                 raise
             except ServerError500 as e:
                 logger.error(f"{self.__class__.__name__} Ошибка сервера ({self.username}): {e}")
