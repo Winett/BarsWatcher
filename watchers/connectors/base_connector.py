@@ -5,6 +5,7 @@ import asyncio
 from typing import Dict, Optional, Any, Awaitable, Callable
 import json
 from pathlib import Path
+from settings import WORKDIR
 
 from watchers.services.fetcher_service import BaseFetcherService
 from watchers.utils.decorators import retry
@@ -14,7 +15,7 @@ from watchers.models.watcher_models import UserCredentials
 retrier = retry(max_attempts=3, delays=(1, 2, 5), exclude_exceptions=(AuthError, ))
 
 class BaseConnector(BaseFetcherService, ABC):
-    session_dir = Path("sessions/")
+    session_dir = WORKDIR / Path("sessions/")
 
     def __init__(self, credentials: UserCredentials, base_url: str = "https://bars.mpei.ru", timeout: int = 30):
         super().__init__(timeout=timeout)

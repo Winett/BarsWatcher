@@ -122,7 +122,7 @@ class BaseConnectionMonitor(EventService):
                 break
             except Exception as e:
                 # raise
-                logger.exception(e)
+                # logger.exception(e)
                 # print(self._logger_template + f"Ошибка в цикле мониторинга {self.__name__}: {e}")
                 logger.error(self._logger_template + f"Ошибка в цикле мониторинга {self.__name__}: {e}")
                 await asyncio.sleep(self._config.poll_interval)

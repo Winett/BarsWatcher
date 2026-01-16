@@ -13,3 +13,6 @@ sessions
 .env.prod
 
 __pycache__
+
+cache.json
+watchers_old/

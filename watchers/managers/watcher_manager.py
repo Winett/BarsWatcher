@@ -10,6 +10,10 @@ if TYPE_CHECKING:
 from watchers.core.base_watcher import BaseWatcher
 from watchers.models.watcher_models import UserCredentials, WatcherType, WatcherEvent, EventType
 from loguru import logger
+#================
+from services.user import UserService
+from database.db import async_session
+#================
 
 from watchers.utils.exceptions import AuthError
 from watchers.services.notification_service import TelegramNotificationService
@@ -60,7 +64,6 @@ class WatcherManager(ABC):
     @classmethod
     async def _handle_watcher_event(cls, event: WatcherEvent):
         """Обработка событий от вотчеров"""
-        #TODO: Добавить общение с БД
         match event.event_type:
             case EventType.NEW_CHANGE:
                 logger.debug(cls.__name__ + f" | {event.username} | {event.message if event.watcher_type == WatcherType.BARS else f'Новое письмо'}")
@@ -69,11 +72,21 @@ class WatcherManager(ABC):
             case EventType.EXCEPTION:
                 match event.error:
                     case error if isinstance(error, AuthError):
-                        await cls.notification_service.send_message(event.user_id, "Неверный логин или пароль")
-                        cls.unregister_watcher(event.user_id)
+                        await cls.notification_service.send_message(event.user_id, f" [{event.watcher_type.value}] Неверный логин или пароль")
+                        await cls.stop_and_delete(event.user_id)
+                        #========================== Временное решение ============================
+                        async with async_session() as session:
+                            if event.watcher_type == WatcherType.BARS:
+                                await UserService(session).set_bars_status_used(event.user_id, False)
+                            elif event.watcher_type == WatcherType.OSEP:
+                                await UserService(session).set_osep_status_used(event.user_id, False)
+                        #==========================================================================
                     case _:
                         await asyncio.sleep(5)
-                        await cls.get_watcher_instance(event.user_id).restart()
+                        try:
+                            await cls.get_watcher_instance(event.user_id).restart()
+                        except AttributeError:
+                            pass
                 # await self.notification_service.send_message(event.user_id, event.message)
             case _:
                 logger.warning(f"{cls.__name__} Неизвестное событие: {event.event_type}")
@@ -112,6 +125,15 @@ class WatcherManager(ABC):
         for user_watcher in cls._get_watchers().values():
             await user_watcher.stop()
 
+    @classmethod
+    async def stop_and_delete(cls, user_id: int):
+        watcher = cls.get_watcher_instance(user_id)
+        if watcher:
+            await watcher.stop()
+            await watcher.close()
+            cls.unregister_watcher(user_id)
+
+
 
 class BarsWatcherManager(WatcherManager):
     pass
@@ -119,111 +141,3 @@ class BarsWatcherManager(WatcherManager):
 
 class OsepWatcherManager(WatcherManager):
     pass
-
-
-
-# class WatcherManager:
-#
-#     _instance = None
-#
-#     def __new__(cls, *args, **kwargs):
-#         if not cls._instance:
-#             cls._instance = super().__new__(cls)
-#         return cls._instance
-#
-#     def __init__(self):
-#         if hasattr(self, 'initialized'):
-#             return
-#
-#         self._watchers: Dict[int, Dict[WatcherType, BaseWatcher]] = defaultdict(dict)
-#
-#         self.notification_service = TelegramNotificationService()
-#
-#         self.initialized = True
-#         self._logger_template = f"{self.__class__.__name__} | "
-#
-#     async def create_watcher(self, credentials: UserCredentials,
-#                              watcher_class, services) -> Optional[BaseWatcher]:
-#         """Создание нового вотчера"""
-#         try:
-#             watcher = watcher_class(credentials, **services)
-#             await self.add_watcher(credentials.user_id, watcher)
-#             return watcher
-#         except Exception as e:
-#             logger.error(f"{self._logger_template} Ошибка создания вотчера: {e}")
-#             return None
-#
-#     async def add_watcher(self, user_id: int, watcher: BaseWatcher):
-#         """Добавление вотчера в менеджер"""
-#         self._watchers[user_id][watcher.credentials.watcher_type] = watcher
-#         watcher.subscribe(self._handle_watcher_event)
-#         logger.info(f"{self._logger_template} Добавлен вотчер для пользователя {user_id}")
-#
-#     async def remove_watcher(self, user_id: int, watcher_type: WatcherType):
-#         """Удаление вотчера"""
-#         if user_id in self._watchers and watcher_type in self._watchers[user_id]:
-#             watcher = self._watchers[user_id].pop(watcher_type)
-#             watcher.unsubscribe(self._handle_watcher_event)
-#             await watcher.stop()
-#
-#             if not self._watchers[user_id]:
-#                 del self._watchers[user_id]
-#
-#     async def _handle_watcher_event(self, event: WatcherEvent):
-#         """Обработка событий от вотчеров"""
-#         #TODO: Добавить общение с БД
-#         match event.event_type:
-#             case EventType.NEW_CHANGE:
-#                 logger.debug(self._logger_template + f"{event.username} | {event.message if event.watcher_type == WatcherType.BARS else f'Новое письмо'}")
-#                 # await self.notification_service.send_message(event.user_id, event.message)
-#                 await self.notification_service.send_message_with_documents(event.user_id, event.message, files=event.metadata.get('files', []))
-#             case EventType.EXCEPTION:
-#                 match event.error:
-#                     case error if isinstance(error, AuthError):
-#                         await self.notification_service.send_message(event.user_id, "Неверный логин или пароль")
-#                         await self.remove_watcher(event.user_id, event.watcher_type)
-#                     case _:
-#                         await asyncio.sleep(5)
-#                         await self.get_watcher(event.user_id, event.watcher_type).restart()
-#                 # await self.notification_service.send_message(event.user_id, event.message)
-#             case _:
-#                 logger.warning(f"{self._logger_template} Неизвестное событие: {event.event_type}")
-#
-#     def get_watcher(self, user_id: int, watcher_type: WatcherType) -> Optional[BaseWatcher]:
-#         """Получение вотчера по пользователю и типу"""
-#         if user_id in self._watchers and watcher_type in self._watchers[user_id]:
-#             return self._watchers[user_id][watcher_type]
-#         return None
-#
-#     async def start_all(self):
-#         """Запуск всех вотчеров"""
-#         tasks = []
-#         for user_watchers in self._watchers.values():
-#             for watcher in user_watchers.values():
-#                 tasks.append(watcher.start())
-#
-#         await asyncio.gather(*tasks, return_exceptions=True)
-#
-#     async def stop_all(self):
-#         """Остановка всех вотчеров"""
-#         tasks = []
-#         for user_watchers in self._watchers.values():
-#             for watcher in user_watchers.values():
-#                 tasks.append(watcher.stop())
-#
-#         await asyncio.gather(*tasks, return_exceptions=True)
-#
-#
-# class BarsWatcherManager(WatcherManager):
-#     class_type: type[BaseWatcher] = BarsWatcher
-#     _watchers: dict[int, class_type] = {}
-#
-#     async def add_watcher(self, user_id: int, watcher: class_type):
-#         await super().add_watcher(user_id, watcher)
-#
-#     async def add_watcher_and_start(self, user_id: int, watcher: class_type):
-#         await self.add_watcher(user_id, watcher)
-#         await watcher.start()
-#
-#     async def get_watcher(self, user_id: int) -> Optional[BaseWatcher]:
-#         return super().get_watcher(user_id, WatcherType.BARS)

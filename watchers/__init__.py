@@ -1,12 +1,15 @@
-from auth.base import BaseAuth
-from auth.bars import BarsAuth
-from auth.osep import OsepAuth
+from .core.base_watcher import BaseWatcher
+from .watchers.bars_watcher import BarsWatcher
+from .watchers.osep_watcher import OsepWatcher
+from .managers.watcher_manager import WatcherManager
+from .models.watcher_models import WatcherType, WatcherEvent, WatcherConfig
 
-from connection.base import BaseConnectionMonitor, BarsConnectionMonitor, OsepConnectionMonitor
-
-from notificator.base import BaseNotificator, TelegramNotificator
-
-from bars_watcher import BarsWatcher
-from osep_watcher import OsepWatcher
-
-from manager import WatcherManager, BarsWatcherManager, OsepWatcherManager
+__all__ = [
+    'BaseWatcher',
+    'BarsWatcher',
+    'OsepWatcher',
+    'WatcherManager',
+    'WatcherType',
+    'WatcherEvent',
+    'WatcherConfig',
+]

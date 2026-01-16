@@ -111,3 +111,6 @@ class BarsWatcher(BaseWatcher):
         """Получение student_id"""
         return await self.fetcher_service.get_student_id()
 
+    async def close(self):
+        await self.fetcher_service.close()
+

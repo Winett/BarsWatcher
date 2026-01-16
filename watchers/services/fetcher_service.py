@@ -36,5 +36,6 @@ class BaseFetcherService(ABC):
 
     async def close(self):
         if self._session:
-            await self._session.connector.close()
             await self._session.close()
+            if self._session.connector and not self._session.connector.closed:
+                await self._session.connector.close()

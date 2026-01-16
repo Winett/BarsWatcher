@@ -135,8 +135,8 @@ class BaseWatcher(ABC):
         self._stats.last_error_time = datetime.now()
         self._stats.status = WatcherStatus.ERROR
 
-        logger.error(f"{self._logger_template} Ошибка: {error}")
-        logger.exception(error)
+        # logger.error(f"{self._logger_template} Ошибка: {error}")
+        # logger.exception(error)
 
         event = WatcherEvent(
             event_type=EventType.EXCEPTION,
@@ -231,3 +231,6 @@ class BaseWatcher(ABC):
     @property
     def is_running(self) -> bool:
         return self._is_running
+
+    async def close(self):
+        ...

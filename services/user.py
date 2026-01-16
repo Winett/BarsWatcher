@@ -26,7 +26,7 @@ class UserService:
 
     async def delete(self, user_id: int) -> None:
         async with self.session_maker as session:
-            delete(User).where(User.user_id == user_id)
+            await session.execute(delete(User).where(User.user_id == user_id))
             await session.commit()
 
     async def check_osep(self, user_id: int) -> bool:

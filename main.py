@@ -1,14 +1,20 @@
-import asyncio
-from sys import stderr
-from datetime import timedelta, timezone
+import aiogram
+from aiohttp import web
 
-from aiogram import Bot, Dispatcher, types
+from utils import setup_logger
+
+import asyncio
+from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import InputMediaDocument, FSInputFile
 from aiogram.types.bot_command import BotCommand
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from settings import settings
+from watchers.connectors.connection_monitor import BarsMonitor, OsepMonitor
+from watchers.managers.watcher_manager import OsepWatcherManager, BarsWatcherManager
+from watchers.services.cache_service import AsyncFileCacher
+from webhook import create_prepared_webapp, WEBHOOK_HOST, WEBHOOK_PORT
+
+from settings import settings, WORKDIR
 from loguru import logger
 
 from handlers import router as handlers_router
@@ -19,84 +25,141 @@ from middlewares.throttling import ThrottlingMiddleware
 from middlewares.logging import LoggingMiddleware
 
 from services.notification import NotificationService
-from watchers.notificator import Notificator
-from watchers.base import BaseAuth
+from watchers.services.notification_service import TelegramNotificationService
+from watchers.utils.cache_documents import timer_cleanup_cache_documents
 
 from loader import recover_notifications_over_restarting_bot, recover_notifications_over_restarting_bot_osep
-
-from _io import TextIOWrapper
+from webhook import WEBHOOK_BASE_URL, WEBHOOK_PATH
 from pathlib import Path
 
 
-logger.remove()
-
-utc_plus_3 = timezone(timedelta(hours=3))
-def format_time_utc3(record):
-    record.update(time=record['time'].astimezone(utc_plus_3))
-logger = logger.patch(format_time_utc3)
-
-logger.add(stderr, format="<white>{time:HH:mm:ss:Z}</white>"
-                          " | <level>{level: <8}</level>"
-                          " | {name}:{function}:{line}"
-                          " | <cyan>{line}</cyan>"
-                          " - <magenta>{message}</magenta>", level="DEBUG")
-
-bot = Bot(
-        token=settings.bot_token,
-        default=DefaultBotProperties(parse_mode="HTML")
-    )
-
-def check_log_size_and_send_to_admin(message: str, log: TextIOWrapper) -> bool:
-    if Path(log.name).stat().st_size > 5 * 1024 * 1024:
-        for admin in settings.admins:
-            asyncio.create_task(bot.send_document(chat_id=admin, document=FSInputFile(path=Path(log.name)), caption="Лог бота"))
-        return True
-    return False
-
-logger.add('log.log', rotation=check_log_size_and_send_to_admin) #каждые 5 МБ
-
-(Path(__file__).parent / "sessions").mkdir(exist_ok=True, parents=True)
-BaseAuth.session_dir = Path(__file__).parent / "sessions"
-
-
-
-async def main():
-    print(f'{settings.DEBUG = }')
-
-    await init_db()
-    logger.info('База данных инициализирована!')
-    Notificator.bot = bot
-    NotificationService.bot = bot
-
+def create_dispatcher() -> Dispatcher:
     dp = Dispatcher(storage=MemoryStorage())
-
     dp.message.middleware(DatabaseMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
     dp.update.outer_middleware(ThrottlingMiddleware())
     dp.update.outer_middleware(LoggingMiddleware())
 
-
-
     dp.include_routers(
         handlers_router
     )
+
+    return dp
+
+
+(WORKDIR / "sessions").mkdir(exist_ok=True, parents=True)
+# BaseAuth.session_dir = Path(__file__).parent / "sessions"
+
+
+async def on_bot_startup(bot: Bot):
+    logger.info('Запуск бота...')
+    await init_db()
+    logger.info('База данных инициализирована!')
+    me = await bot.get_me()
+    logger.info(f'Бот запущен! bot_id = {me.id} username = {me.username}')
+    #===============
+    Path(WORKDIR / "cashed_files").mkdir(exist_ok=True)
+    cache = AsyncFileCacher(filename=WORKDIR / "cache.json")
+    async def autosave_cache():
+        while True:
+            await asyncio.sleep(60)
+            await cache.asave()
+    asyncio.create_task(autosave_cache())
+    asyncio.create_task(timer_cleanup_cache_documents())
+    #===============
+
+    BarsMonitor().subscribe(BarsWatcherManager.process_connection_event)
+    OsepMonitor().subscribe(OsepWatcherManager.process_connection_event)
+
     asyncio.create_task(recover_notifications_over_restarting_bot())
     asyncio.create_task(recover_notifications_over_restarting_bot_osep())
-    about = await bot.get_me()
 
     await bot.set_my_commands([
         BotCommand(command='/start', description='Перезапустить бота'),
         BotCommand(command='/suggestion', description='Отправить предложение по улучшению бота'),
         BotCommand(command='/report', description='Отправить админу сообщение о неполадках'),
     ])
-    await bot.delete_webhook(drop_pending_updates=True)
-    logger.info(f'Бот запущен! bot_id = {about.id} username = {about.username}')
 
-    await dp.start_polling(bot, skip_updates=True)
+async def on_bot_shutdown(*args, **kwargs):
+    cache = AsyncFileCacher(filename="cache.json")
+    await cache.close()
+
+    BarsMonitor().unsubscribe(BarsWatcherManager.process_connection_event)
+    OsepMonitor().unsubscribe(OsepWatcherManager.process_connection_event)
+    await BarsMonitor().close()
+    await OsepMonitor().close()
+
+async def setup_webhook(bot: Bot) -> bool:
+    url = f"{WEBHOOK_BASE_URL}{WEBHOOK_PATH}"
+
+    webhook_info = await bot.get_webhook_info()
+    if webhook_info.url != url:
+        await bot.delete_webhook(drop_pending_updates=True)
+        try:
+            await bot.set_webhook(url=url, )
+        except aiogram.exceptions.TelegramBadRequest as error:
+            logger.error(f'Ошибка при установке webhook! {error = }')
+            return False
+        logger.info(f"Новый webhook установлен! url = {url}")
+        return True
+    return True
+
+async def main():
+    bot = Bot(
+        token=settings.bot_token,
+        default=DefaultBotProperties(parse_mode="HTML")
+    )
+
+    setup_logger(bot, settings.admins)
+
+    print(f'{settings.DEBUG = }')
+    TelegramNotificationService.set_bot_instance(bot)
+    NotificationService.bot = bot
+
+    dp = create_dispatcher()
+    dp.startup.register(on_bot_startup)
+    dp.shutdown.register(on_bot_shutdown)
+    # app = create_prepared_webapp(bot, dp)
+    #
+    # web.run_app(app, host=WEBHOOK_HOST, port=WEBHOOK_PORT)
+    # await bot.delete_webhook(drop_pending_updates=True)
+    # await dp.start_polling(bot)
+    loop = asyncio.get_event_loop().set_debug(True)
+    try:
+        set_webhook = await setup_webhook(bot)
+        if set_webhook:
+            try:
+                app = create_prepared_webapp(bot, dp)
+                runner = web.AppRunner(app)
+                await runner.setup()
+
+                site = web.TCPSite(runner, WEBHOOK_HOST, WEBHOOK_PORT)
+                await site.start()
+                logger.info(f"Бот запущен на Webhooks")
+                try:
+                    await asyncio.Future()
+                except KeyboardInterrupt:
+                    logger.info('Остановка сервера...')
+                finally:
+                    await runner.cleanup()
+                    await bot.session.close()
+
+            except RuntimeError as error:
+                logger.exception(error)
+                logger.info(f"RuntimeError удаляю webhook")
+                await bot.delete_webhook(drop_pending_updates=True)
+                await dp.start_polling(bot)
+        else:
+            logger.info(f"Бот запущен на Long Polling")
+            await bot.delete_webhook(drop_pending_updates=True)
+            await dp.start_polling(bot)
+    except KeyboardInterrupt:
+        logger.warning(f"KeyboardInterrupt")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+    # main()
 
 
 

@@ -13,6 +13,8 @@ from hashlib import md5
 import aiofiles
 from pathlib import Path
 
+from settings import WORKDIR
+
 
 
 class OsepWatcher(BaseWatcher):
@@ -59,9 +61,9 @@ class OsepWatcher(BaseWatcher):
                             content=file_content
                         )
 
-                        Path("cashed_files/").mkdir(exist_ok=True)
+                        (WORKDIR / Path("cashed_files/")).mkdir(exist_ok=True)
 
-                        path = Path(f"cashed_files/{md5(att_data.id.encode(errors="ignore")).hexdigest()}_{att_data.filename}.bin")
+                        path = WORKDIR / Path(f"cashed_files/{md5(att_data.id.encode(errors="ignore")).hexdigest()}_{att_data.filename}.bin")
 
 
                         async with aiofiles.open(path, "wb") as f:
@@ -80,7 +82,7 @@ class OsepWatcher(BaseWatcher):
                         load_data.append(att_data)
                     else:
                         att_data = AttachmentData(**file)
-                        async with aiofiles.open(f"cashed_files/{md5(att_data.id.encode(errors="ignore")).hexdigest()}_{att_data.filename}.bin", "rb") as f:
+                        async with aiofiles.open(WORKDIR / f"cashed_files/{md5(att_data.id.encode(errors="ignore")).hexdigest()}_{att_data.filename}.bin", "rb") as f:
                             att_data.content = await f.read()
                         load_data.append(att_data)
 
@@ -184,4 +186,7 @@ class OsepWatcher(BaseWatcher):
             )
 
             await self._notify_subscribers(event)
+
+    async def close(self):
+        await self.fetcher_service.close()
 
