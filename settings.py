@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
+from pathlib import Path
 
 
 def create_env_without_data():
@@ -28,4 +29,18 @@ class Settings(BaseSettings):
     admins: list[int] = Field(alias='ADMINS')
     db_url: str = Field(alias='DB_URL')
 
+    @field_validator('bot_token')
+    def check_bot_token(cls, v):
+        if v == "":
+            raise ValueError("Токен не должен быть пустым")
+        return v
+
+    @field_validator('db_url')
+    def check_db_url(cls, v):
+        if v == "":
+            raise ValueError("Ссылка на подключение к базе данных не должно быть пустым")
+        return v
+
 settings = Settings()
+
+WORKDIR = Path(__file__).parent
