@@ -5,6 +5,9 @@ import asyncio
 from typing import Dict, Optional, Any, Awaitable, Callable
 import json
 from pathlib import Path
+
+from loguru import logger
+
 from settings import WORKDIR
 
 from watchers.services.fetcher_service import BaseFetcherService
@@ -24,6 +27,8 @@ class BaseConnector(BaseFetcherService, ABC):
         self.credentials = credentials
         self.session_dir.mkdir(parents=True, exist_ok=True)
         self._session_file = self.session_dir / f"{credentials.username}_{self.__class__.__name__}.json"
+
+        self._logger_template = f"{self.__class__.__name__} | {self.credentials.username} | "
 
     # @abstractmethod
     # async def authenticate(self) -> bool:
@@ -72,9 +77,11 @@ class BaseConnector(BaseFetcherService, ABC):
     async def login(self) -> bool:
         """Попытка авторизации"""
         if await self._login_with_cookies():
+            logger.debug(self._logger_template + f"Авторизация с помощью куки")
             return True
         self.session.cookie_jar.clear()
         if await self._login_with_credentials():
+            logger.debug(self._logger_template + f"Авторизация с данных")
             return True
         return False
 

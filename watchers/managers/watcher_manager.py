@@ -81,7 +81,8 @@ class WatcherManager(ABC):
                             elif event.watcher_type == WatcherType.OSEP:
                                 await UserService(session).set_osep_status_used(event.user_id, False)
                         #==========================================================================
-                    case _:
+                    case error:
+                        logger.exception(error)
                         await asyncio.sleep(5)
                         try:
                             await cls.get_watcher_instance(event.user_id).restart()
