@@ -18,6 +18,9 @@ from watchers.utils.exceptions import ResponseError
 class OsepFetcher(OsepConnector):
     def __init__(self, credentials: UserCredentials, timeout: int = 30):
         super().__init__(credentials, "https://mail.mpei.ru", timeout)
+        self._root_folder_id: str | None = None
+
+
 
 
     @property
@@ -41,7 +44,25 @@ class OsepFetcher(OsepConnector):
             "X-OWA-CANARY": self.x_owa_canary,
         }
 
+    async def get_root_folder_id(self) -> str:
+        headers = self.headers_to_update("GetOwaUserConfiguration")
+        answer = await self._request_with_authorization(
+            endpoint="/owa/service.svc?action=GetOwaUserConfiguration",
+            method="POST",
+            headers=headers,
+        )
+        answer = json.loads(answer)
+        session_settings = answer.get("SessionSettings", {})
+        folder_names = session_settings.get("DefaultFolderNames", [])
+        ind = folder_names.index("msgfolderroot")
+        return session_settings.get("DefaultFolderIds", [])[ind].get("Id", "")
+
+
     async def get_folders(self) -> Folders:
+        if not self._root_folder_id:
+            _root_folder_id = await self.get_root_folder_id()
+            self._root_folder_id = _root_folder_id
+
         data = {
               "__type": "FindFolderJsonRequest:#Exchange",
               "Header": {
@@ -71,7 +92,8 @@ class OsepFetcher(OsepConnector):
                   {
                     "__type": "FolderId:#Exchange",
                     "ChangeKey": "AQAAAA==",
-                    "Id": "AAMkADBiMDM2ZmI3LTI0Y2ItNDMzMy05OWQ1LTRhY2Y0ZDFmYmNhNAAuAAAAAAAXF5gPgvkQRbR8chVGnnQxAQBf9fplkHqsS5Ua52t4fVokAAAAAAEIAAA="
+                    "Id": self._root_folder_id
+                    # "Id": "AAMkADBiMDM2ZmI3LTI0Y2ItNDMzMy05OWQ1LTRhY2Y0ZDFmYmNhNAAuAAAAAAAXF5gPgvkQRbR8chVGnnQxAQBf9fplkHqsS5Ua52t4fVokAAAAAAEIAAA="
                   }
                 ],
                 "Traversal": "Deep",
@@ -219,7 +241,7 @@ class OsepFetcher(OsepConnector):
                         f"{uid}&brwnm=chrome&X-OWA-CANARY={self.x_owa_canary}&n=96",
                         timeout=600)
                 as response):
-                    logger.debug(f"Начало лонг поллинга")
+                    logger.debug(self._logger_template + f"Начало лонг поллинга")
 
 
                     async for chunk in response.content.iter_chunked(1024 * 1024):
@@ -228,7 +250,7 @@ class OsepFetcher(OsepConnector):
                             new_event = parse_html_chunks(html_chunk)
                             if new_event:
                                 callback_for_new_messages(new_event)
-                    logger.debug(f"Конец лонг поллинга")
+                    logger.debug(self._logger_template + f"Конец лонг поллинга")
 
                 await self._request_with_authorization(
                     f"/owa/ev.owa2?ns=PendingRequest&ev=FinishNotificationRequest&UA=0&cid={uid}",

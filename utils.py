@@ -108,8 +108,8 @@ def setup_logger(bot: Bot, admins: list[int]):
                           " | {name}:{function}:{module}:{file}:{line}"
                           " - <magenta>{message}</magenta>",
                 "level": "DEBUG",
-                "rotation": "1 MB",
-                # "rotation": "00:00",
+                # "rotation": "1 MB",
+                "rotation": "00:00",
                 "backtrace": True,
                 "diagnose": True,
                 "retention": retention_callback,

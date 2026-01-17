@@ -53,8 +53,8 @@ class BarsWatcher(BaseWatcher):
         return self._last_process_data
 
     async def _iteration(self):
-        logger.debug(f"{self._logger_template} Начало итерации")
-        logger.info(f"{self._logger_template} {self.student_id = } {self._last_process_data_hash = }")
+        # logger.debug(f"{self._logger_template} Начало итерации")
+        # logger.info(f"{self._logger_template} {self.student_id = } {self._last_process_data_hash = }")
         await super()._iteration()
 
     async def detect_changes(self, old_data: dict, new_data: dict) -> List[str]:
