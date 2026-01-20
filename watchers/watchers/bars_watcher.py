@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, List, Optional
 
 
@@ -29,6 +30,12 @@ class BarsWatcher(BaseWatcher):
                          # notification_service,
                          config)
         self.fetcher_service = BarsFetcher(credentials, student_id=student_id)
+        original_login = self.fetcher_service.login
+
+        async def wrapped_login(*args, **kwargs):
+            self._stats.last_auth_time = datetime.now()
+            return await original_login(*args, **kwargs)
+        self.fetcher_service.login = wrapped_login
         # self.marks_url_endpoint = "/ST_Study/Student_SemesterSheet/_PartialListStudent_SemesterSheet__Mark"
         # self.student_id_url_endpoint = "/ST/Student/ListStudent"
         self._student_id: Optional[str] = student_id
