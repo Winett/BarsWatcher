@@ -5,17 +5,21 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 
 from watchers.models.connection_monitor_models import ConnectionStatus
+from watchers.models.mail_models import AttachmentData
+
 if TYPE_CHECKING:
     from watchers import BarsWatcher, OsepWatcher
 from watchers.core.base_watcher import BaseWatcher
-from watchers.models.watcher_models import UserCredentials, WatcherType, WatcherEvent, EventType
+from watchers.models.watcher_models import UserCredentials, WatcherType, WatcherEvent, EventType, WatcherStatus
 from loguru import logger
 #================
 from services.user import UserService
 from database.db import async_session
+from settings import settings
 #================
 
-from watchers.utils.exceptions import AuthError
+from watchers.utils.exceptions import AuthError, DataParsingError, ResponseError, RequestVerificationTokenError
+from uuid import uuid4
 from watchers.services.notification_service import TelegramNotificationService
 from watchers.connectors.connection_monitor import BarsMonitor, OsepMonitor, BaseConnectionMonitor
 
@@ -82,6 +86,18 @@ class WatcherManager(ABC):
                                 await UserService(session).set_osep_status_used(event.user_id, False)
                         #==========================================================================
                     case error:
+                        if isinstance(error, DataParsingError) or isinstance(error, ResponseError) or isinstance(error, RequestVerificationTokenError):
+                            uid = uuid4().hex
+                            content = error.content.encode(errors="ignore", encoding="utf-8") if isinstance(error.content, str) else error.content
+                            att_data = AttachmentData(
+                                id=uid,
+                                content_type="application/html",
+                                filename=f"{event.username}_{event.user_id}_{event.watcher_type.value}.html",
+                                size=len(content),
+                                content=content,
+                            )
+                            for admin in settings.admins:
+                                await cls.notification_service.send_message_with_documents(admin, f"Ошибка при обработке запроса: {type(error).__name__} у {event.username} <code>{event.user_id}</code>", files=[att_data])
                         logger.exception(error)
                         await asyncio.sleep(5)
                         try:
@@ -133,6 +149,25 @@ class WatcherManager(ABC):
             await watcher.stop()
             await watcher.close()
             cls.unregister_watcher(user_id)
+
+    @classmethod
+    def watcher_stats(cls):
+        stats = {}
+        cnt = 0
+
+        watcher_status = defaultdict(int)
+        non_running = defaultdict(list)
+        for user_id, watcher in cls._get_watchers().items():
+            watcher_status[watcher.stats.status.value] += 1
+            if watcher.stats.status not in [WatcherStatus.WORKING]:
+                non_running[watcher.stats.status.value].append((f"<code>{user_id}</code>", watcher.credentials.username))
+            cnt += 1
+        stats = {
+            "count": cnt,
+            "watcher_status": watcher_status,
+            "non_running": non_running,
+        }
+        return stats
 
 
 

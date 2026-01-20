@@ -24,7 +24,7 @@ def retry(max_attempts: int = 3, delays: tuple = (1, 2, 5), exclude_exceptions: 
                     last_error = e
                     if attempt < max_attempts - 1:
                         delay = delays[attempt] if attempt < len(delays) else delays[-1]
-                        logger.warning(f"Попытка {attempt + 1} не удалась: {e}. Повтор через {delay}с")
+                        logger.warning(f"Попытка {attempt + 1} не удалась: {e}. Повтор через {delay}с | {func.__module__} {func.__name__}(args={args}, kwargs={kwargs})")
                         await asyncio.sleep(delay)
 
             raise last_error

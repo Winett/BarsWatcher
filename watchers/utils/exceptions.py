@@ -19,14 +19,17 @@ class ConnectionError(WatcherError):
     pass
 
 class DataParsingError(WatcherError):
-    """Ошибка парсинга данных"""
-    pass
 
-class StudentIdGettingError(WatcherError):
+    def __init__(self, message: str, content: str):
+        super().__init__(message)
+        self.content = content
+
+
+class StudentIdGettingError(DataParsingError):
     """Ошибка получения student_id"""
     pass
 
-class RequestVerificationTokenError(WatcherError):
+class RequestVerificationTokenError(DataParsingError):
     """Ошибка получения токена RequestVerificationToken"""
     pass
 

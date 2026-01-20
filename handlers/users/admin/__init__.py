@@ -4,6 +4,7 @@ from handlers.users.admin.notify_all_users import router as notify_all_users_rou
 from handlers.users.admin.notify_one_user import router as notify_one_user_router
 from handlers.users.admin.admin import router as admin_router
 from handlers.users.admin.get_user import router as get_user_router
+from handlers.users.admin.get_manager_status import router as get_manager_status_router
 
 __all__ = ['router']
 
@@ -14,4 +15,5 @@ router.include_routers(
     notify_all_users_router,
     notify_one_user_router,
     get_user_router,
+    get_manager_status_router,
 )

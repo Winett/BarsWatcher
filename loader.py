@@ -17,13 +17,16 @@ async def recover_notifications_over_restarting_bot():
     cache = AsyncFileCacher(filename=WORKDIR / "cache.json")
     logger.info(f"Всего на перезапуск БАРС - {len(users)}")
     for i, user in enumerate(users, start=1):
-        logger.info(f"Перезапускаю нотификатор после рестарта бота для {user.user_id} {user.bars_login} ({i}/{len(users)})")
+        logger.info(f"Перезапускаю BarsWatcher после рестарта бота для {user.user_id} {user.bars_login} ({i}/{len(users)})")
         bars_watcher = BarsWatcher(
             credentials=UserCredentials(user_id=user.user_id, username=user.bars_login, password=user.bars_password, watcher_type=WatcherType.BARS),
             cache_service=cache,
         )
         res = await bars_watcher.start()
         await asyncio.sleep(0.25)
+        if i % 15 == 0:
+            logger.debug("Пауза 5 секунды, перед запуском остальных вотчеров")
+            await asyncio.sleep(5)
         # if not res:
         #     await user_service.set_bars_status_used(user.user_id, False)
     # logger.enable("watchers")
@@ -36,7 +39,7 @@ async def recover_notifications_over_restarting_bot_osep():
     cache = AsyncFileCacher(filename=WORKDIR / "cache.json")
     logger.info(f"Всего на перезапуск ОСЭП - {len(users)}")
     for i, user in enumerate(users, start=1):
-        logger.info(f"Перезапускаю нотификатор после рестарта бота для {user.user_id} {user.osep_login} ({i}/{len(users)})")
+        logger.info(f"Перезапускаю OsepWatcher после рестарта бота для {user.user_id} {user.osep_login} ({i}/{len(users)})")
         # manager = WatcherManagerFactory.get_manager(OsepWatcher)
         osep_watcher = OsepWatcher(
             credentials=UserCredentials(user_id=user.user_id, username=user.bars_login, password=user.bars_password, watcher_type=WatcherType.OSEP),
@@ -44,6 +47,9 @@ async def recover_notifications_over_restarting_bot_osep():
         )
         res = await osep_watcher.start()
         await asyncio.sleep(0.25)
+        if i % 15 == 0:
+            logger.debug("Пауза 5 секунды, перед запуском остальных вотчеров")
+            await asyncio.sleep(5)
         # if not res:
         #     await user_service.set_osep_status_used(user.user_id, False)
     # logger.enable("watchers")

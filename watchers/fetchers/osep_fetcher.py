@@ -33,7 +33,7 @@ class OsepFetcher(OsepConnector):
         if kwargs.get("headers", {}).get("X-OWA-CANARY", " ") != self.x_owa_canary:
             kwargs.get("headers", {})["X-OWA-CANARY"] = self.x_owa_canary
 
-        await super().fetch(*args, **kwargs)
+        return await super().fetch(*args, **kwargs)
         # async with session.get(self.base_url + '/owa/#path=/mail', allow_redirects=False) as response:
         #     pass
 
@@ -241,7 +241,7 @@ class OsepFetcher(OsepConnector):
                         f"{uid}&brwnm=chrome&X-OWA-CANARY={self.x_owa_canary}&n=96",
                         timeout=600)
                 as response):
-                    logger.debug(self._logger_template + f"Начало лонг поллинга")
+                    # logger.debug(self._logger_template + f"Начало лонг поллинга")
 
 
                     async for chunk in response.content.iter_chunked(1024 * 1024):
@@ -250,7 +250,7 @@ class OsepFetcher(OsepConnector):
                             new_event = parse_html_chunks(html_chunk)
                             if new_event:
                                 callback_for_new_messages(new_event)
-                    logger.debug(self._logger_template + f"Конец лонг поллинга")
+                    # logger.debug(self._logger_template + f"Конец лонг поллинга")
 
                 await self._request_with_authorization(
                     f"/owa/ev.owa2?ns=PendingRequest&ev=FinishNotificationRequest&UA=0&cid={uid}",

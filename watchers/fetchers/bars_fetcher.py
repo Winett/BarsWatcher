@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 
 from watchers.models.mark_models import Mark, DisciplineMarks, RewritingMark
-from watchers.utils.exceptions import StudentIdGettingError
+from watchers.utils.exceptions import StudentIdGettingError, DataParsingError
 from watchers.models.watcher_models import UserCredentials
 from watchers.connectors.bars_connector import BarsConnector
 from bs4 import BeautifulSoup
@@ -18,10 +18,10 @@ class BarsFetcher(BarsConnector):
             return self._student_id
 
         content = (await self._request_with_authorization(endpoint="/ST/Student/ListStudent")).decode()
-        student_id = re.search(r'[\w]{8}-[\w]{4}-[\w]{4}-[\w]{4}-[\w]{12}', content)
+        student_id = re.search(r'studentID=([\w]{8}-[\w]{4}-[\w]{4}-[\w]{4}-[\w]{12})', content)
         if not student_id:
-            raise StudentIdGettingError("Ошибка получения параметра student_id")
-        self._student_id = student_id.group(0)
+            raise StudentIdGettingError("Ошибка получения параметра student_id", content=content)
+        self._student_id = student_id.group(1)
         return self._student_id
 
     @staticmethod
@@ -117,6 +117,7 @@ class BarsFetcher(BarsConnector):
 
                             # Проверка переписываний
                             spans = cells[3].find_all("span")
+                            attempt = 1
                             for span in spans:
                                 rewrite_text = span.text.strip()
                                 if rewrite_text:
@@ -127,8 +128,9 @@ class BarsFetcher(BarsConnector):
                                         rewrite_date = rewrite_parts[1].replace(")", "").strip()
                                         mark.rewriting.append(
                                             # RewritingMark(mark=rewrite_mark, date=datetime.strptime(rewrite_date, "%d.%m.%y"))
-                                            RewritingMark(mark=rewrite_mark, date=rewrite_date)
+                                            RewritingMark(mark=rewrite_mark, date=rewrite_date, attempt=attempt)
                                         )
+                                        attempt += 1
                         else:
                             mark = Mark(mark="", date=None)
 

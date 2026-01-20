@@ -15,7 +15,7 @@ from watchers.utils.decorators import retry
 from watchers.utils.exceptions import ConnectionError, AuthError, ResponseError
 from watchers.models.watcher_models import UserCredentials
 
-retrier = retry(max_attempts=3, delays=(1, 2, 5), exclude_exceptions=(AuthError, ))
+retrier = retry(max_attempts=4, delays=(1, 2, 5), exclude_exceptions=(AuthError, ))
 
 class BaseConnector(BaseFetcherService, ABC):
     session_dir = WORKDIR / Path("sessions/")
@@ -108,7 +108,7 @@ class BaseConnector(BaseFetcherService, ABC):
     async def _request_with_authorization(self, endpoint: str, method: str = "GET", params: Optional[Dict] = None, data: Optional[Dict] = None, **kwargs):
         try:
             async with self.session.request(method, self.base_url + endpoint, params=params, data=data, allow_redirects=False, **kwargs) as response:
-                if response.status >= 300:
+                if response.status in [302, 401]:
                     raise AuthError("Ошибка авторизации")
                 return await response.content.read()
         except AuthError:
@@ -117,7 +117,7 @@ class BaseConnector(BaseFetcherService, ABC):
                 kwargs['headers'] = {**kwargs['headers'], 'X-OWA-CANARY': self.x_owa_canary}
             async with self.session.request(method, self.base_url + endpoint, params=params, data=data, allow_redirects=False,
                                             **kwargs) as response:
-                if response.status >= 300:
+                if response.status in [302, 401]:
                     raise AuthError("Ошибка авторизации")
                 return await response.content.read()
 

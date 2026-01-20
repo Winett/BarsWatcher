@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, List, Optional
 
 
@@ -13,6 +14,7 @@ from watchers.services.notification_service import BaseNotificationService
 from hashlib import md5
 
 from watchers.managers.watcher_manager import BarsWatcherManager
+from watchers.utils.exceptions import DataParsingError
 
 
 class BarsWatcher(BaseWatcher):
@@ -28,6 +30,12 @@ class BarsWatcher(BaseWatcher):
                          # notification_service,
                          config)
         self.fetcher_service = BarsFetcher(credentials, student_id=student_id)
+        original_login = self.fetcher_service.login
+
+        async def wrapped_login(*args, **kwargs):
+            self._stats.last_auth_time = datetime.now()
+            return await original_login(*args, **kwargs)
+        self.fetcher_service.login = wrapped_login
         # self.marks_url_endpoint = "/ST_Study/Student_SemesterSheet/_PartialListStudent_SemesterSheet__Mark"
         # self.student_id_url_endpoint = "/ST/Student/ListStudent"
         self._student_id: Optional[str] = student_id
@@ -46,8 +54,10 @@ class BarsWatcher(BaseWatcher):
         if self._last_process_data_hash:
             if new_hash == self._last_process_data_hash:
                 return self._last_process_data
-
-        self._last_process_data = self.fetcher_service.parse_marks(data)
+        try:
+            self._last_process_data = self.fetcher_service.parse_marks(data)
+        except Exception:
+            raise DataParsingError(f"Ошибка парсинга данных у {self.credentials.username} <code>{self.credentials.user_id}</code>", content=data)
         self._last_process_data_hash = new_hash
 
         return self._last_process_data
@@ -81,15 +91,23 @@ class BarsWatcher(BaseWatcher):
         changes = []
 
         for i, (old_mark, new_mark) in enumerate(zip(old.marks, new.marks)):
-            if old_mark.mark != new_mark.mark:
+            if old_mark.mark != new_mark.mark or old_mark.date != new_mark.date:
                 if not old_mark.mark:
                     changes.append(f"Оценка по {old.name} КМ-{i + 1}: {new_mark.mark}")
                 else:
-                    changes.append(f"Изменилась оценка по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_mark.mark}")
+                    # Если изменилась оценка или дата оценки, и при этом изменилось количество переписываний, то это оценка, скорее всего, за переписывание
+                    if len(old_mark.rewriting) != len(new_mark.rewriting):
+                        changes.append(f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_mark.mark}")
+                    else:
+                        changes.append(f"Изменилась оценка по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_mark.mark}")
+                # Если оценка за переписывание отлична от изначальной оценки => она будет записана
+                # в основной блок оценки, и проверять переписывания смысла нет
+                continue
 
             # Сравнение переписываний
             if len(old_mark.rewriting) != len(new_mark.rewriting):
-                for rewrite in range(1, len(new_mark.rewriting) - len(old_mark.rewriting) + 1):
+                # for rewrite in range(1, len(new_mark.rewriting) - len(old_mark.rewriting) + 1):
+                for rewrite in range(len(new_mark.rewriting) - len(old_mark.rewriting), 0, -1):
                     changes.append(f"Переписывание по {old.name} КМ-{i + 1}: -> {new_mark.rewriting[-rewrite].mark}") # Последние оценки - последние переписывания
 
             for j in range(min(len(old_mark.rewriting), len(new_mark.rewriting))):

@@ -82,4 +82,7 @@ def enable_watching_keyboard(user_id: int, used_bars: bool = False, used_osep: b
         keyboard.row(
             InlineKeyboardButton(text="Отслеживать ОСЭП", callback_data=f'watching_osep_{user_id}'),
         )
+    keyboard.row(
+        InlineKeyboardButton(text="Обновить", callback_data=f'refresh_user_state_massage_{user_id}')
+    )
     return keyboard.as_markup()

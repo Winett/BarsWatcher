@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Dict, List, Optional
 from loguru import logger
 
@@ -22,6 +23,20 @@ class OsepWatcher(BaseWatcher):
         super().__init__(credentials, *args, **kwargs)
 
         self.fetcher_service = OsepFetcher(credentials)
+        original_login = self.fetcher_service.login
+
+        async def wrapped_login(*args, **kwargs):
+            self._stats.last_auth_time = datetime.now()
+            return await original_login(*args, **kwargs)
+
+        self.fetcher_service.login = wrapped_login
+
+        origin__request_with_authorization = self.fetcher_service._request_with_authorization
+        async def wrapped_login(*args, **kwargs):
+            self._stats.last_auth_time = datetime.now()
+            return await origin__request_with_authorization(*args, **kwargs)
+
+        self.fetcher_service._request_with_authorization = wrapped_login
 
         self.config.poll_interval = 0  # 5 минут для почты
         self._last_sync_token: Optional[str] = None
@@ -108,6 +123,7 @@ class OsepWatcher(BaseWatcher):
 
         async def _update_folders_cache():
             folders = await self.fetcher_service.get_folders()
+            self._stats.last_fetch_time = datetime.now()
             logger.debug(self._logger_template + f"Обновляю Кэш папок")
             await self.cache_service.set(self._folders_cache_key, {folder.display_name: folder for folder in folders.folders}, ttl=self.config.cache_ttl)
             logger.debug(self._logger_template + f'Сохранил кэш')
@@ -121,6 +137,7 @@ class OsepWatcher(BaseWatcher):
                 logger.warning(f"Необычное событие при лонг поллинг: {event = }")
 
         folders = await self.fetcher_service.get_folders()
+        self._stats.last_fetch_time = datetime.now()
 
         old_folders = await self.cache_service.get(self._folders_cache_key)
 
@@ -156,6 +173,7 @@ class OsepWatcher(BaseWatcher):
 
 
         await self.fetcher_service.await_new_messages(_process_new_mail_event)
+        self._stats.last_fetch_time = datetime.now()
 
         await _update_folders_cache()
 
