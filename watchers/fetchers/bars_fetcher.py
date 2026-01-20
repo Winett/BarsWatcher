@@ -117,6 +117,7 @@ class BarsFetcher(BarsConnector):
 
                             # Проверка переписываний
                             spans = cells[3].find_all("span")
+                            attempt = 1
                             for span in spans:
                                 rewrite_text = span.text.strip()
                                 if rewrite_text:
@@ -127,8 +128,9 @@ class BarsFetcher(BarsConnector):
                                         rewrite_date = rewrite_parts[1].replace(")", "").strip()
                                         mark.rewriting.append(
                                             # RewritingMark(mark=rewrite_mark, date=datetime.strptime(rewrite_date, "%d.%m.%y"))
-                                            RewritingMark(mark=rewrite_mark, date=rewrite_date)
+                                            RewritingMark(mark=rewrite_mark, date=rewrite_date, attempt=attempt)
                                         )
+                                        attempt += 1
                         else:
                             mark = Mark(mark="", date=None)
 

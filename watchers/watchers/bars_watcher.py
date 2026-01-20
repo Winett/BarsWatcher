@@ -84,15 +84,23 @@ class BarsWatcher(BaseWatcher):
         changes = []
 
         for i, (old_mark, new_mark) in enumerate(zip(old.marks, new.marks)):
-            if old_mark.mark != new_mark.mark:
+            if old_mark.mark != new_mark.mark or old_mark.date != new_mark.date:
                 if not old_mark.mark:
                     changes.append(f"Оценка по {old.name} КМ-{i + 1}: {new_mark.mark}")
                 else:
-                    changes.append(f"Изменилась оценка по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_mark.mark}")
+                    # Если изменилась оценка или дата оценки, и при этом изменилось количество переписываний, то это оценка, скорее всего, за переписывание
+                    if len(old_mark.rewriting) != len(new_mark.rewriting):
+                        changes.append(f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_mark.mark}")
+                    else:
+                        changes.append(f"Изменилась оценка по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_mark.mark}")
+                # Если оценка за переписывание отлична от изначальной оценки => она будет записана
+                # в основной блок оценки, и проверять переписывания смысла нет
+                continue
 
             # Сравнение переписываний
             if len(old_mark.rewriting) != len(new_mark.rewriting):
-                for rewrite in range(1, len(new_mark.rewriting) - len(old_mark.rewriting) + 1):
+                # for rewrite in range(1, len(new_mark.rewriting) - len(old_mark.rewriting) + 1):
+                for rewrite in range(len(new_mark.rewriting) - len(old_mark.rewriting), 0, -1):
                     changes.append(f"Переписывание по {old.name} КМ-{i + 1}: -> {new_mark.rewriting[-rewrite].mark}") # Последние оценки - последние переписывания
 
             for j in range(min(len(old_mark.rewriting), len(new_mark.rewriting))):
