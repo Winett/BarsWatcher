@@ -32,11 +32,11 @@ class OsepWatcher(BaseWatcher):
         self.fetcher_service.login = wrapped_login
 
         origin__request_with_authorization = self.fetcher_service._request_with_authorization
-        async def wrapped_login(*args, **kwargs):
-            self._stats.last_auth_time = datetime.now()
+        async def wrapped_request(*args, **kwargs):
+            self._stats.last_fetch_time = datetime.now()
             return await origin__request_with_authorization(*args, **kwargs)
 
-        self.fetcher_service._request_with_authorization = wrapped_login
+        self.fetcher_service._request_with_authorization = wrapped_request
 
         self.config.poll_interval = 0  # 5 минут для почты
         self._last_sync_token: Optional[str] = None
