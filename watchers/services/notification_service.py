@@ -67,48 +67,48 @@ class TelegramNotificationService(BaseNotificationService):
             documents.append(docs)
         return documents
 
-
     async def send_message(self, user_id: int, message: str) -> bool:
-        a = None
         try:
-            for message in self.prepare_message(message):
-                while time_to_sleep := self.rate_limiter.can_request():
-                    await asyncio.sleep(time_to_sleep)
-                a = await self.bot.send_message(chat_id=user_id, text=message, reply_to_message_id=a.message_id if a else None)
-                self.rate_limiter.record_request()
+            message_parts = list(self.prepare_message(message))
+            last_message = None
+
+            for part in message_parts:
+                async with self.rate_limiter:
+                    last_message = await self.bot.send_message(
+                        chat_id=user_id,
+                        text=part,
+                        reply_to_message_id=last_message.message_id if last_message else None
+                    )
             return True
+
         except TelegramRetryAfter as e:
             await asyncio.sleep(e.retry_after)
-            for message in self.prepare_message(message):
-                while time_to_sleep := self.rate_limiter.can_request():
-                    await asyncio.sleep(time_to_sleep)
-                a = await self.bot.send_message(chat_id=user_id, text=message,
-                                                reply_to_message_id=a.message_id if a else None)
-                self.rate_limiter.record_request()
-            return True
-        except:
+            return await self.send_message(user_id, message)
+
+        except Exception:
             return False
 
     async def send_message_with_documents(self, user_id: int, message: str, files: list[AttachmentData]) -> bool:
         try:
+            if message:
+                await self.send_message(user_id, message)
 
-            await self.send_message(user_id=user_id, message=message)
-            for docs in self.prepare_documents(files):
-                while time_to_sleep := self.rate_limiter.can_request():
-                    await asyncio.sleep(time_to_sleep)
-                a = await self.bot.send_media_group(chat_id=user_id, media=docs)
-                self.rate_limiter.record_request()
+
+            documents_groups = list(self.prepare_documents(files))
+
+            for docs_group in documents_groups:
+                async with self.rate_limiter:
+                    await self.bot.send_media_group(
+                        chat_id=user_id,
+                        media=docs_group
+                    )
             return True
+
         except TelegramRetryAfter as e:
             await asyncio.sleep(e.retry_after)
-            await self.send_message(user_id=user_id, message=message)
-            for docs in self.prepare_documents(files):
-                while time_to_sleep := self.rate_limiter.can_request():
-                    await asyncio.sleep(time_to_sleep)
-                a = await self.bot.send_media_group(chat_id=user_id, media=docs)
-                self.rate_limiter.record_request()
-            return True
-        except:
+            return await self.send_message_with_documents(user_id, message, files)
+
+        except Exception:
             return False
 
 
