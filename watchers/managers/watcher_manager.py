@@ -134,6 +134,25 @@ class WatcherManager(ABC):
             await watcher.close()
             cls.unregister_watcher(user_id)
 
+    @classmethod
+    def watcher_stats(cls):
+        stats = {}
+        cnt = 0
+
+        watcher_status = defaultdict(int)
+        non_running = defaultdict(list)
+        for user_id, watcher in cls._get_watchers().items():
+            watcher_status[watcher.stats.status.value] += 1
+            if watcher.stats.status not in [WatcherStatus.WORKING]:
+                non_running[watcher.stats.status.value].append((f"<code>{user_id}</code>", watcher.credentials.username))
+            cnt += 1
+        stats = {
+            "count": cnt,
+            "watcher_status": watcher_status,
+            "non_running": non_running,
+        }
+        return stats
+
 
 
 class BarsWatcherManager(WatcherManager):
