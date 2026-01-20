@@ -13,6 +13,7 @@ from watchers.services.notification_service import BaseNotificationService
 from hashlib import md5
 
 from watchers.managers.watcher_manager import BarsWatcherManager
+from watchers.utils.exceptions import DataParsingError
 
 
 class BarsWatcher(BaseWatcher):
@@ -46,8 +47,10 @@ class BarsWatcher(BaseWatcher):
         if self._last_process_data_hash:
             if new_hash == self._last_process_data_hash:
                 return self._last_process_data
-
-        self._last_process_data = self.fetcher_service.parse_marks(data)
+        try:
+            self._last_process_data = self.fetcher_service.parse_marks(data)
+        except Exception:
+            raise DataParsingError(f"Ошибка парсинга данных у {self.credentials.username} <code>{self.credentials.user_id}</code>", content=data)
         self._last_process_data_hash = new_hash
 
         return self._last_process_data

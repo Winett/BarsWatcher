@@ -33,7 +33,7 @@ class OsepFetcher(OsepConnector):
         if kwargs.get("headers", {}).get("X-OWA-CANARY", " ") != self.x_owa_canary:
             kwargs.get("headers", {})["X-OWA-CANARY"] = self.x_owa_canary
 
-        await super().fetch(*args, **kwargs)
+        return await super().fetch(*args, **kwargs)
         # async with session.get(self.base_url + '/owa/#path=/mail', allow_redirects=False) as response:
         #     pass
 

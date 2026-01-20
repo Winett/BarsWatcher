@@ -6,7 +6,7 @@ from loguru import logger
 
 from watchers.services.fetcher_service import BaseFetcherService
 from watchers.utils.decorators import retry
-from watchers.utils.exceptions import ConnectionError, AuthError, RequestVerificationTokenError
+from watchers.utils.exceptions import ConnectionError, AuthError, RequestVerificationTokenError, DataParsingError
 
 from watchers.models.watcher_models import UserCredentials
 from watchers.connectors.base_connector import BaseConnector
@@ -35,9 +35,12 @@ class BarsConnector(BaseConnector):
         content = (await self.fetch('/', allow_redirects=False)).decode()
         # async with session.get(self.base_url + '/', allow_redirects=False) as response:
         #     content = await response.read()
-        request_verification_token = re.search(r'name="__RequestVerificationToken" type="\w+" value="(.+)" \/><input', content).group(1)
+        search = re.search(r'name="__RequestVerificationToken" type="\w+" value="(.+)" \/><input', content)
+        if not search:
+            raise DataParsingError("Не удалось получить страницу для получения токена __RequestVerificationToken", content)
+        request_verification_token = search.group(1)
         if not request_verification_token:
-            raise RequestVerificationTokenError("Не удалось извлеть токен __RequestVerificationToken")
+            raise RequestVerificationTokenError("Не удалось извлеть токен __RequestVerificationToken", content=content)
 
         data = {
             "__RequestVerificationToken": request_verification_token,
