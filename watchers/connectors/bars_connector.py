@@ -10,12 +10,17 @@ from watchers.utils.exceptions import ConnectionError, AuthError, RequestVerific
 
 from watchers.models.watcher_models import UserCredentials
 from watchers.connectors.base_connector import BaseConnector
+from watchers.utils.rate_limiter import RateLimiter
 
+rate_limit = RateLimiter(max_requests=15, period_seconds=1.5)
+
+rate_limit_fetcher = RateLimiter(max_requests=30, period_seconds=1)
 
 class BarsConnector(BaseConnector):
 
     def __init__(self, credentials: UserCredentials,  base_url: str = "https://bars.mpei.ru/bars_web", timeout: int = 30):
         super().__init__(credentials, base_url, timeout)
+        self.fetch = rate_limit_fetcher(self.fetch)
 
     async def is_authenticated(self) -> bool:
         async with self.session.get(self.base_url + '/ST/Student/ListStudent', allow_redirects=False) as response:
@@ -23,6 +28,7 @@ class BarsConnector(BaseConnector):
                 return True
         return False
 
+    @rate_limit
     async def _login_with_credentials(self) -> bool:
         session = self.session
         session.cookie_jar.clear()

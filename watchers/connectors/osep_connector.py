@@ -1,13 +1,8 @@
-import aiohttp
-import xml.etree.ElementTree as ET
-from typing import Dict, Optional, Any, List
-from datetime import datetime
-from loguru import logger
-
-from watchers.services.fetcher_service import BaseFetcherService
-from watchers.models.mail_models import AttachmentData
 from watchers.models.watcher_models import UserCredentials
 from watchers.connectors.base_connector import BaseConnector
+from watchers.utils.rate_limiter import RateLimiter
+
+rate_limit = RateLimiter(max_requests=15, period_seconds=1.5)
 
 
 class OsepConnector(BaseConnector):
@@ -15,6 +10,7 @@ class OsepConnector(BaseConnector):
     def __init__(self, credentials: UserCredentials, base_url: str = "https://mail.mpei.ru", timeout: int = 30):
         super().__init__(credentials, base_url, timeout)
 
+    @rate_limit
     async def _login_with_credentials(self) -> bool:
         session = self.session
         session.cookie_jar.clear()
