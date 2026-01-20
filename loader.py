@@ -42,7 +42,7 @@ async def recover_notifications_over_restarting_bot_osep():
         logger.info(f"Перезапускаю OsepWatcher после рестарта бота для {user.user_id} {user.osep_login} ({i}/{len(users)})")
         # manager = WatcherManagerFactory.get_manager(OsepWatcher)
         osep_watcher = OsepWatcher(
-            credentials=UserCredentials(user_id=user.user_id, username=user.bars_login, password=user.bars_password, watcher_type=WatcherType.OSEP),
+            credentials=UserCredentials(user_id=user.user_id, username=user.osep_login, password=user.osep_password, watcher_type=WatcherType.OSEP),
             cache_service=cache,
         )
         res = await osep_watcher.start()
