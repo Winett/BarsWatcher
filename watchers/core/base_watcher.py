@@ -37,7 +37,7 @@ class BaseWatcher(ABC):
         self._task: Optional[asyncio.Task] = None
         # self._event_handlers: list[Callable[[WatcherEvent], Awaitable[None]]] = []
 
-        self._logger_template = f"{self.__class__.__name__} | {credentials.username} | "
+        self._logger_template = f"{self.__class__.__name__:^10} | {credentials.username:^10} | "
 
         self._register_instance()
 
