@@ -41,7 +41,10 @@ class OsepFetcher(OsepConnector):
     def headers_to_update(self, action: str):
         return {
             "Action": action,
-            "X-OWA-CANARY": self.x_owa_canary,
+            "X-Owa-Canary": self.x_owa_canary,
+            "x-requested-with": "XMLHttpRequest",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 OPR/125.0.0.0 (Edition Yx GX)",
+            "referer": "https://mail.mpei.ru/owa/",
         }
 
     async def get_root_folder_id(self) -> str:

@@ -38,7 +38,7 @@ class OsepWatcher(BaseWatcher):
 
         self.fetcher_service._request_with_authorization = wrapped_request
 
-        self.config.poll_interval = 0  # 5 минут для почты
+        self.config.poll_interval = 60  # 5 минут для почты
         self._last_sync_token: Optional[str] = None
         self._folders_cache_key = f"osep_folders_{self.credentials.username}"
 
@@ -124,9 +124,9 @@ class OsepWatcher(BaseWatcher):
         async def _update_folders_cache():
             folders = await self.fetcher_service.get_folders()
             self._stats.last_fetch_time = datetime.now()
-            logger.debug(self._logger_template + f"Обновляю Кэш папок")
+            # logger.debug(self._logger_template + f"Обновляю Кэш папок")
             await self.cache_service.set(self._folders_cache_key, {folder.display_name: folder for folder in folders.folders}, ttl=self.config.cache_ttl)
-            logger.debug(self._logger_template + f'Сохранил кэш')
+            # logger.debug(self._logger_template + f'Сохранил кэш')
 
         def _process_new_mail_event(event: NewMailEvent):
 
@@ -136,46 +136,49 @@ class OsepWatcher(BaseWatcher):
             else:
                 logger.warning(f"Необычное событие при лонг поллинг: {event = }")
 
-        folders = await self.fetcher_service.get_folders()
-        self._stats.last_fetch_time = datetime.now()
+        while True:
 
-        old_folders = await self.cache_service.get(self._folders_cache_key)
+            folders = await self.fetcher_service.get_folders()
+            self._stats.last_fetch_time = datetime.now()
 
-        if old_folders:
-            old_folders = {folder_name: Folder(**old_folders[folder_name]) for folder_name in old_folders.keys()}
-            folders = {folder.display_name: folder for folder in folders.folders}
-            ignore_folders = {"Журнал", "Задачи", "Заметки", "Исходящие", "Нежелательная почта", "Отправленные",
-                              "Удаленные", "Черновики",
-                              "Conversation Action Settings", "Working Set", "{06967759-274D-40B2-A3EB-D7F9E73727D7}",
-                              "{A9E2BC46-B3A0-4243-B315-60D991004455}",
-                              "GAL Contacts", "Recipient Cache"}
-            for folder_name, old_folder in old_folders.items():
+            old_folders = await self.cache_service.get(self._folders_cache_key)
 
-                new_folder: Folder = folders.get(folder_name)
-                if not old_folder or not new_folder or folder_name in ignore_folders:
-                    continue
+            if old_folders:
+                old_folders = {folder_name: Folder(**old_folders[folder_name]) for folder_name in old_folders.keys()}
+                folders = {folder.display_name: folder for folder in folders.folders}
+                ignore_folders = {"Журнал", "Задачи", "Заметки", "Исходящие", "Нежелательная почта", "Отправленные",
+                                  "Удаленные", "Черновики",
+                                  "Conversation Action Settings", "Working Set", "{06967759-274D-40B2-A3EB-D7F9E73727D7}",
+                                  "{A9E2BC46-B3A0-4243-B315-60D991004455}",
+                                  "GAL Contacts", "Recipient Cache"}
+                for folder_name, old_folder in old_folders.items():
 
-                if old_folder.total_count < new_folder.total_count:
-                    conversations = await self.fetcher_service.find_conversations_from_folder(
-                        folder_id=new_folder.folder_id.id,
-                        type_folder_id="FolderId",
-                        max_entries_returned=new_folder.total_count - old_folder.total_count
-                    )
-                    conversations = conversations.get("Body", {}).get("Conversations", [])
+                    new_folder: Folder = folders.get(folder_name)
+                    if not old_folder or not new_folder or folder_name in ignore_folders:
+                        continue
 
-                    for conversation in conversations:
-                        conv_id = conversation.get("ConversationId", {}).get("Id")
-                        if not conv_id:
-                            logger.warning(f"Не удалось обработать новое письмо во время пропуска")
-                        asyncio.create_task(_process_new_mail(conv_id))
+                    if old_folder.total_count < new_folder.total_count:
+                        conversations = await self.fetcher_service.find_conversations_from_folder(
+                            folder_id=new_folder.folder_id.id,
+                            type_folder_id="FolderId",
+                            max_entries_returned=new_folder.total_count - old_folder.total_count
+                        )
+                        conversations = conversations.get("Body", {}).get("Conversations", [])
 
-        await _update_folders_cache()
+                        for conversation in conversations:
+                            conv_id = conversation.get("ConversationId", {}).get("Id")
+                            if not conv_id:
+                                logger.warning(f"Не удалось обработать новое письмо во время пропуска")
+                            asyncio.create_task(_process_new_mail(conv_id))
+
+            await _update_folders_cache()
+            await asyncio.sleep(self.config.poll_interval)
 
 
-        await self.fetcher_service.await_new_messages(_process_new_mail_event)
-        self._stats.last_fetch_time = datetime.now()
-
-        await _update_folders_cache()
+        # await self.fetcher_service.await_new_messages(_process_new_mail_event)
+        # self._stats.last_fetch_time = datetime.now()
+        #
+        # await _update_folders_cache()
 
 
     async def process_data(self, data: Dict) -> List[MailMessage]:
