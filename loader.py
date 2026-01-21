@@ -23,10 +23,11 @@ async def recover_notifications_over_restarting_bot():
             cache_service=cache,
         )
         res = await bars_watcher.start()
-        await asyncio.sleep(0.25)
+        await asyncio.sleep(1)
         if i % 15 == 0:
-            logger.debug("Пауза 5 секунды, перед запуском остальных вотчеров")
-            await asyncio.sleep(5)
+            time_to_sleep = 10
+            logger.debug(f"Пауза {time_to_sleep} секунды, перед запуском остальных вотчеров")
+            await asyncio.sleep(10)
         # if not res:
         #     await user_service.set_bars_status_used(user.user_id, False)
     # logger.enable("watchers")
@@ -46,10 +47,11 @@ async def recover_notifications_over_restarting_bot_osep():
             cache_service=cache,
         )
         res = await osep_watcher.start()
-        await asyncio.sleep(0.25)
-        if i % 15 == 0:
-            logger.debug("Пауза 5 секунды, перед запуском остальных вотчеров")
-            await asyncio.sleep(5)
+        await asyncio.sleep(1)
+        if i % 10 == 0:
+            time_to_sleep = 10
+            logger.debug(f"Пауза {time_to_sleep} секунды, перед запуском остальных вотчеров")
+            await asyncio.sleep(time_to_sleep)
         # if not res:
         #     await user_service.set_osep_status_used(user.user_id, False)
     # logger.enable("watchers")
