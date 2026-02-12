@@ -74,7 +74,7 @@ async def on_bot_startup(bot: Bot):
     BarsMonitor().subscribe(BarsWatcherManager.process_connection_event)
     OsepMonitor().subscribe(OsepWatcherManager.process_connection_event)
 
-    asyncio.create_task(recover_notifications_over_restarting_bot())
+    asyncio.create_task(recover_notifications_over_restarting_bot(bot))
     asyncio.create_task(recover_notifications_over_restarting_bot_osep())
 
     await bot.set_my_commands([
