@@ -20,6 +20,8 @@ from watchers.services.cache_service import AsyncFileCacher
 from watchers.watchers import OsepWatcher, BarsWatcher
 from watchers.managers.watcher_manager import BarsWatcherManager, OsepWatcherManager
 
+from watchers.fetchers.bars_fetcher import BarsFetcher
+from watchers.utils.exceptions import Auth2FA
 router = Router(name=__name__)
 
 
@@ -151,8 +153,18 @@ async def change_watching(msg: CallbackQuery, state: FSMContext, session: sessio
     elif msg.data.startswith('watching_bars_'):
         try:
             # manager = WatcherManagerFactory.get_manager(BarsWatcher)
+            user_creds = UserCredentials(username=user.bars_login, password=user.bars_password, user_id=user.user_id, watcher_type=WatcherType.BARS)
+            bars_connector = BarsFetcher(user_creds)
+            try:
+                res = await bars_connector.login()
+            except Auth2FA as e:
+                await msg.answer("Включена 2FA, не удаётся авторизоваться")
+                return
+            if not res:
+                await msg.answer("Не удалось авторизоваться у пользователя")
             bars_watcher = BarsWatcher(
-                credentials=UserCredentials(username=user.bars_login, password=user.bars_password, user_id=user.user_id, watcher_type=WatcherType.BARS),
+                credentials=user_creds,
+                fetcher_service=bars_connector,
                 cache_service = AsyncFileCacher(WORKDIR / "cache.json")
             )
             # manager.add(user.user_id, bars_watcher)

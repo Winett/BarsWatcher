@@ -16,6 +16,8 @@ from watchers.services.cache_service import AsyncFileCacher
 # from watchers import BarsWatcher, BarsWatcherManager, WatcherManagerFactory
 from watchers.watchers import BarsWatcher, OsepWatcher
 from watchers.managers.watcher_manager import BarsWatcherManager, OsepWatcherManager
+from watchers.fetchers.bars_fetcher import BarsFetcher
+from watchers.utils.exceptions import Auth2FA
 
 from loguru import logger
 
@@ -77,9 +79,26 @@ async def bars_password_command(msg: Message, state: FSMContext, session: sessio
     await state.clear()
     # manager = WatcherManagerFactory.get_manager(BarsWatcher)
     # bars_watcher = BarsWatcher(bars_login, msg.text, msg.from_user.id, TelegramNotificator(msg.from_user.id))
+    user_creds = UserCredentials(username=bars_login, password=msg.text, user_id=msg.from_user.id,
+                                    watcher_type=WatcherType.BARS)
+    fetcher = BarsFetcher(user_creds)
+
+    try:
+        res = await fetcher.login()
+    except Auth2FA:
+        await fetcher.send_2fa_code()
+        await state.set_state(BarsState.af2_code)
+        logger.debug(f"Пользователь {msg.from_user.id} {msg.from_user.username} ожидает 2FA код")
+        await msg.answer("Введите код 2FA")
+        return
+
+    if not res:
+        await msg.answer("Неверный логин или пароль")
+        return
+
     bars_watcher = BarsWatcher(
-        credentials=UserCredentials(username=bars_login, password=msg.text, user_id=msg.from_user.id,
-                                    watcher_type=WatcherType.BARS),
+        credentials=user_creds,
+        fetcher_service=fetcher,
         cache_service=AsyncFileCacher(WORKDIR / "cache.json")
     )
     # if not (await bars_watcher.test_login()):
@@ -94,6 +113,22 @@ async def bars_password_command(msg: Message, state: FSMContext, session: sessio
     await msg.answer('Уведомления о БАРСе включены!')
     return
 
+@router.message(BarsState.af2_code)
+async def process_2fa_code_command(msg: Message, state: FSMContext, session: sessionmaker):
+    user_service = UserService(session)
+    fetcher: BarsFetcher = BarsFetcher.get_fetcher_instance(msg.from_user.id)
+    res = await fetcher.verify_2fa_code(msg.text)
+    if not res:
+        await msg.answer("Не удалось авторизроваться, возможно, неверный код 2FA")
+        await fetcher.close()
+    else:
+        logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание БАРСа!')
+        await user_service.set_bars_status_used(msg.from_user.id, True)
+        await msg.answer('Уведомления о БАРСе включены!')
+    await state.clear()
+    return
+
+
 @router.callback_query(F.data == 'watching_bars')
 async def watching_bars_command(msg: CallbackQuery, state: FSMContext, session: sessionmaker):
     user_service = UserService(session)
@@ -101,9 +136,25 @@ async def watching_bars_command(msg: CallbackQuery, state: FSMContext, session: 
     password = await user_service.get_bars_password(msg.from_user.id)
     # manager = WatcherManagerFactory.get_manager(BarsWatcher)
     # bars_watcher = BarsWatcher(login, password, msg.from_user.id, TelegramNotificator(msg.from_user.id))
+    user_creds = UserCredentials(username=login, password=password, user_id=msg.from_user.id,
+                                 watcher_type=WatcherType.BARS)
+    fetcher = BarsFetcher(user_creds)
+
+    try:
+        res = await fetcher.login()
+    except Auth2FA:
+        await fetcher.send_2fa_code()
+        await state.set_state(BarsState.af2_code)
+        logger.debug(f"Пользователь {msg.from_user.id} {msg.from_user.username} ожидает 2FA код")
+        await msg.message.answer("Введите код 2FA")
+        return
+
+    if not res:
+        await msg.answer("Неверный логин или пароль")
+        return
     bars_watcher = BarsWatcher(
-        credentials=UserCredentials(username=login, password=password, user_id=msg.from_user.id,
-                                    watcher_type=WatcherType.BARS),
+        credentials=user_creds,
+        fetcher_service=fetcher,
         cache_service=AsyncFileCacher(WORKDIR / "cache.json")
     )
     # manager.add(msg.from_user.id, bars_watcher)

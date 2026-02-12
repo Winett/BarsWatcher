@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 
 from collections import defaultdict
 
+from pyexpat.errors import messages
+
 from watchers.models.connection_monitor_models import ConnectionStatus
 from watchers.models.mail_models import AttachmentData
 
@@ -18,7 +20,7 @@ from database.db import async_session
 from settings import settings
 #================
 
-from watchers.utils.exceptions import AuthError, DataParsingError, ResponseError, RequestVerificationTokenError
+from watchers.utils.exceptions import AuthError, DataParsingError, ResponseError, RequestVerificationTokenError, Auth2FA
 from uuid import uuid4
 from watchers.services.notification_service import TelegramNotificationService
 from watchers.connectors.connection_monitor import BarsMonitor, OsepMonitor, BaseConnectionMonitor
@@ -75,8 +77,12 @@ class WatcherManager(ABC):
                 await cls.notification_service.send_message_with_documents(event.user_id, event.message, files=event.metadata.get('files', []))
             case EventType.EXCEPTION:
                 match event.error:
-                    case error if isinstance(error, AuthError):
-                        await cls.notification_service.send_message(event.user_id, f" [{event.watcher_type.value}] Неверный логин или пароль")
+                    case error if isinstance(error, AuthError) or isinstance(error, Auth2FA):
+                        if isinstance(error, Auth2FA):
+                            message = "Нужно переавторизоваться"
+                        else:
+                            message = "Неверный логин или пароль"
+                        await cls.notification_service.send_message(event.user_id, f" [{event.watcher_type.value}] {message}")
                         await cls.stop_and_delete(event.user_id)
                         #========================== Временное решение ============================
                         async with async_session() as session:

@@ -12,10 +12,10 @@ from settings import WORKDIR
 
 from watchers.services.fetcher_service import BaseFetcherService
 from watchers.utils.decorators import retry
-from watchers.utils.exceptions import ConnectionError, AuthError, ResponseError
+from watchers.utils.exceptions import ConnectionError, AuthError, ResponseError, Auth2FA
 from watchers.models.watcher_models import UserCredentials
 
-retrier = retry(max_attempts=4, delays=(1, 2, 5), exclude_exceptions=(AuthError, ))
+retrier = retry(max_attempts=4, delays=(1, 2, 5), exclude_exceptions=(AuthError, Auth2FA, ))
 
 class BaseConnector(BaseFetcherService, ABC):
     session_dir = WORKDIR / Path("sessions/")

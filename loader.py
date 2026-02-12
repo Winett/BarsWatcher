@@ -6,6 +6,8 @@ from services.user import UserService
 from settings import WORKDIR
 from watchers.models.watcher_models import UserCredentials, WatcherType
 from watchers.services.cache_service import AsyncFileCacher
+from watchers.fetchers.bars_fetcher import BarsFetcher
+from watchers.utils.exceptions import Auth2FA
 
 from watchers import OsepWatcher, BarsWatcher
 
@@ -18,8 +20,25 @@ async def recover_notifications_over_restarting_bot():
     logger.info(f"Всего на перезапуск БАРС - {len(users)}")
     for i, user in enumerate(users, start=1):
         logger.info(f"Перезапускаю BarsWatcher после рестарта бота для {user.user_id} {user.bars_login} ({i}/{len(users)})")
+        user_creds = UserCredentials(user_id=user.user_id, username=user.bars_login, password=user.bars_password, watcher_type=WatcherType.BARS)
+        bars_connector = BarsFetcher(user_creds)
+        try:
+            res = await bars_connector.login()
+        except Auth2FA as e:
+            # Уведомлять пользователя, что нужно переавторизоваться в БАРС
+            async with async_session() as session:
+                user_service = UserService(session)
+                users = await user_service.set_bars_status_used(user.user_id, False)
+            continue
+        if not res:
+            # Уведомлять пользователя, что нужно переавторизоваться в БАРС
+            async with async_session() as session:
+                user_service = UserService(session)
+                users = await user_service.set_bars_status_used(user.user_id, False)
+
         bars_watcher = BarsWatcher(
-            credentials=UserCredentials(user_id=user.user_id, username=user.bars_login, password=user.bars_password, watcher_type=WatcherType.BARS),
+            credentials=user_creds,
+            fetcher_service=bars_connector,
             cache_service=cache,
         )
         res = await bars_watcher.start()

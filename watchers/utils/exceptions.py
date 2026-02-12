@@ -6,6 +6,9 @@ class AuthError(WatcherError):
     """Ошибка авторизации"""
     pass
 
+class Auth2FA(WatcherError):
+    pass
+
 class PermanentAuthError(AuthError):
     """Постоянная ошибка авторизации (неверные данные)"""
     pass
