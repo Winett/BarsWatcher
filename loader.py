@@ -28,13 +28,13 @@ async def recover_notifications_over_restarting_bot():
             # Уведомлять пользователя, что нужно переавторизоваться в БАРС
             async with async_session() as session:
                 user_service = UserService(session)
-                users = await user_service.set_bars_status_used(user.user_id, False)
+                await user_service.set_bars_status_used(user.user_id, False)
             continue
         if not res:
             # Уведомлять пользователя, что нужно переавторизоваться в БАРС
             async with async_session() as session:
                 user_service = UserService(session)
-                users = await user_service.set_bars_status_used(user.user_id, False)
+                await user_service.set_bars_status_used(user.user_id, False)
 
         bars_watcher = BarsWatcher(
             credentials=user_creds,
