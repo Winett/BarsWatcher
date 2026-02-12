@@ -123,7 +123,16 @@ async def process_2fa_code_command(msg: Message, state: FSMContext, session: ses
         await fetcher.close()
     else:
         logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание БАРСа!')
+        user = await user_service.find_user(user_id=msg.from_user.id)
+        user_creds = UserCredentials(username=user.bars_login, password=user.bars_password, user_id=msg.from_user.id, watcher_type=WatcherType.BARS)
+        bars_watcher = BarsWatcher(
+            credentials=user_creds,
+            fetcher_service=fetcher,
+            cache_service=AsyncFileCacher(WORKDIR / "cache.json")
+        )
+        await bars_watcher.start()
         await user_service.set_bars_status_used(msg.from_user.id, True)
+
         await msg.answer('Уведомления о БАРСе включены!')
     await state.clear()
     return
