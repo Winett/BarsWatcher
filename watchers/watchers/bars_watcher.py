@@ -20,7 +20,7 @@ from watchers.utils.exceptions import DataParsingError
 class BarsWatcher(BaseWatcher):
     def __init__(self,
                  credentials: UserCredentials,
-                 # fetcher_service: BarsFetcher,
+                 fetcher_service: BarsFetcher,
                  cache_service: AsyncFileCacher,
                  # notification_service: BaseNotificationService,
                  config: Optional[WatcherConfig] = None,
@@ -29,7 +29,8 @@ class BarsWatcher(BaseWatcher):
         super().__init__(credentials, cache_service,
                          # notification_service,
                          config)
-        self.fetcher_service = BarsFetcher(credentials, student_id=student_id)
+        # self.fetcher_service = BarsFetcher(credentials, student_id=student_id)
+        self.fetcher_service = fetcher_service
         original_login = self.fetcher_service.login
 
         async def wrapped_login(*args, **kwargs):

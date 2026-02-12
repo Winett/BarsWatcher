@@ -62,12 +62,15 @@ async def on_bot_startup(bot: Bot):
     cache = AsyncFileCacher(filename=WORKDIR / "cache.json")
     async def autosave_cache():
         while True:
-            await asyncio.sleep(60)
+            await asyncio.sleep(300)
             await cache.asave()
     asyncio.create_task(autosave_cache())
     asyncio.create_task(timer_cleanup_cache_documents())
     #===============
 
+    await BarsMonitor().start_monitoring()
+    await OsepMonitor().start_monitoring()
+    await asyncio.sleep(1)
     BarsMonitor().subscribe(BarsWatcherManager.process_connection_event)
     OsepMonitor().subscribe(OsepWatcherManager.process_connection_event)
 

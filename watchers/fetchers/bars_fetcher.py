@@ -9,9 +9,15 @@ from watchers.connectors.bars_connector import BarsConnector
 from bs4 import BeautifulSoup
 
 class BarsFetcher(BarsConnector):
+    instances = {}
     def __init__(self, credentials: UserCredentials, timeout: int = 30, student_id: str | None = None):
         super().__init__(credentials, "https://bars.mpei.ru/bars_web", timeout)
         self._student_id: str | None = student_id
+        self.instances[credentials.user_id] = self
+
+    @classmethod
+    def get_fetcher_instance(cls, user_id):
+        return cls.instances.get(user_id)
 
     async def get_student_id(self) -> str:
         if self._student_id:
