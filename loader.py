@@ -1,5 +1,6 @@
 from loguru import logger
 import asyncio
+from aiogram import Bot
 
 from database.db import async_session
 from services.user import UserService
@@ -11,7 +12,7 @@ from watchers.utils.exceptions import Auth2FA
 
 from watchers import OsepWatcher, BarsWatcher
 
-async def recover_notifications_over_restarting_bot():
+async def recover_notifications_over_restarting_bot(bot: Bot):
     async with async_session() as session:
         user_service = UserService(session)
         users = await user_service.find_all_users_used_bars()
@@ -26,12 +27,14 @@ async def recover_notifications_over_restarting_bot():
             res = await bars_connector.login()
         except Auth2FA as e:
             # Уведомлять пользователя, что нужно переавторизоваться в БАРС
+            await bot.send_message(chat_id=user.user_id, text="Необходимо переаторизоваться в БАРС")
             async with async_session() as session:
                 user_service = UserService(session)
                 await user_service.set_bars_status_used(user.user_id, False)
             continue
         if not res:
             # Уведомлять пользователя, что нужно переавторизоваться в БАРС
+            await bot.send_message(chat_id=user.user_id, text="Необходимо переаторизоваться в БАРС")
             async with async_session() as session:
                 user_service = UserService(session)
                 await user_service.set_bars_status_used(user.user_id, False)

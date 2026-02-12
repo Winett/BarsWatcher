@@ -19,6 +19,11 @@ class BarsFetcher(BarsConnector):
     def get_fetcher_instance(cls, user_id):
         return cls.instances.get(user_id)
 
+    async def close(self):
+        if self.instances.get(self.credentials.user_id):
+            del self.instances[self.credentials.user_id]
+        await super().close()
+
     async def get_student_id(self) -> str:
         if self._student_id:
             return self._student_id
