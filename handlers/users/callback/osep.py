@@ -12,6 +12,7 @@ from watchers.models.watcher_models import UserCredentials, WatcherType
 from watchers.services.cache_service import AsyncFileCacher
 from watchers.services.watcher_factory import WatcherFactory
 from watchers.core.exceptions import Auth2FA
+from watchers.connectors.connection_monitor import OsepMonitor
 from states.osepState import OsepState
 
 from loguru import logger
@@ -78,6 +79,10 @@ async def osep_password_command(msg: Message, state: FSMContext, session: sessio
         watcher_type=WatcherType.OSEP
     )
 
+    if not OsepMonitor().is_connected:
+        await msg.answer("Сервер ОСЭП в данный момент недоступен. Попробуйте позже.")
+        return
+
     res = await auth.login()
     if not res:
         await msg.answer("Неверный логин или пароль")
@@ -106,6 +111,10 @@ async def watching_osep_command(msg: CallbackQuery, state: FSMContext, session: 
         password=osep_password,
         watcher_type=WatcherType.OSEP
     )
+
+    if not OsepMonitor().is_connected:
+        await msg.answer("Сервер ОСЭП в данный момент недоступен. Попробуйте позже.")
+        return
 
     res = await auth.login()
     if not res:

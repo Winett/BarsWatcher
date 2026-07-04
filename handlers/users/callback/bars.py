@@ -15,6 +15,7 @@ from watchers.session.pool_session import PoolSession
 from watchers.auth.bars_auth import BarsAuth
 from watchers.managers.watcher_manager import BarsWatcherManager
 from watchers.core.exceptions import Auth2FA
+from watchers.connectors.connection_monitor import BarsMonitor
 
 from loguru import logger
 
@@ -79,6 +80,10 @@ async def bars_password_command(msg: Message, state: FSMContext, session: sessio
         watcher_type=WatcherType.BARS
     )
 
+    if not BarsMonitor().is_connected:
+        await msg.answer("Сервер БАРС в данный момент недоступен. Попробуйте позже.")
+        return
+
     try:
         res = await auth.login()
     except Auth2FA:
@@ -116,6 +121,11 @@ async def process_2fa_code_command(msg: Message, state: FSMContext, session: ses
         await state.clear()
         return
 
+    if not BarsMonitor().is_connected:
+        await msg.answer("Сервер БАРС в данный момент недоступен. Попробуйте позже.")
+        await state.clear()
+        return
+
     res = await auth.verify_2fa_code(msg.text)
     if not res:
         await msg.answer("Не удалось авторизоваться, возможно, неверный код 2FA")
@@ -145,6 +155,10 @@ async def watching_bars_command(msg: CallbackQuery, state: FSMContext, session: 
         password=password,
         watcher_type=WatcherType.BARS
     )
+
+    if not BarsMonitor().is_connected:
+        await msg.answer("Сервер БАРС в данный момент недоступен. Попробуйте позже.")
+        return
 
     try:
         res = await auth.login()
