@@ -1,4 +1,5 @@
 import asyncio
+import random
 from typing import Dict, Optional, Generic, TypeVar
 from abc import ABC
 from collections import defaultdict
@@ -29,18 +30,73 @@ class WatcherManager(ABC, Generic[W]):
     _managers_watchers: dict[str, dict[int, BaseWatcher]] = defaultdict(dict)
     notification_service = TelegramNotificationService()
 
+    # Конфигурация staggered resume
+    STAGGER_DELAY = 2.0    # Базовая задержка между вотчерами (сек)
+    STAGGER_JITTER = 3.0   # Случайный разброс (сек)
+
     @classmethod
     def _get_watchers(cls) -> dict[int, W]:
         return cls._managers_watchers[cls.__name__]
 
     @classmethod
     async def process_connection_event(cls, conn_event: ConnectionStatus):
-        if conn_event.CONNECTED:
-            await cls.resume_all()
-        elif conn_event.DISCONNECTED:
-            await cls.pause_all()
-        else:
-            logger.warning(f"{cls.__name__} Неизвестный статус соединения: {conn_event}")
+        """Обработка события соединения от ConnectionMonitor."""
+        logger.info(f"{cls.__name__} | Событие соединения: {conn_event.value}")
+
+        match conn_event:
+            case ConnectionStatus.CONNECTED:
+                # Сервер восстановился — staggered resume
+                await cls._staggered_resume()
+            case ConnectionStatus.DEGRADED:
+                # Сервер медленный — просто логируем, вотчеры продолжают
+                logger.warning(f"{cls.__name__} | Сервер работает медленно (DEGRADED)")
+            case ConnectionStatus.DISCONNECTED:
+                # Сервер недоступен — ставим event unavailable + пауза
+                cls._set_all_server_unavailable()
+                await cls.pause_all()
+            case ConnectionStatus.RECOVERING:
+                # Сервер восстанавливается — можно пробовать
+                logger.info(f"{cls.__name__} | Сервер восстанавливается (RECOVERING)")
+            case _:
+                logger.debug(f"{cls.__name__} | Статус: {conn_event.value}")
+
+    @classmethod
+    def _set_all_server_unavailable(cls):
+        """Установить event unavailable для всех вотчеров."""
+        for watcher in cls._get_watchers().values():
+            watcher.on_server_unavailable()
+
+    @classmethod
+    def _set_all_server_available(cls):
+        """Установить event available для всех вотчеров."""
+        for watcher in cls._get_watchers().values():
+            watcher.on_server_available()
+
+    @classmethod
+    async def _staggered_resume(cls):
+        """Возобновление вотчеров с задержками для предотвращения thundering herd."""
+        watchers = list(cls._get_watchers().values())
+        if not watchers:
+            return
+
+        # Сначала ставим event available
+        cls._set_all_server_available()
+
+        # Случайный порядок для равномерного распределения
+        random.shuffle(watchers)
+
+        logger.info(f"{cls.__name__} | Staggered resume: {len(watchers)} вотчеров")
+
+        for i, watcher in enumerate(watchers):
+            delay = cls.STAGGER_DELAY + random.uniform(0, cls.STAGGER_JITTER)
+            logger.info(
+                f"{cls.__name__} | Resume {watcher.credentials.username} "
+                f"через {delay:.1f}s ({i+1}/{len(watchers)})"
+            )
+            await asyncio.sleep(delay)
+            await watcher.resume()
+
+        logger.info(f"{cls.__name__} | Staggered resume завершён")
 
     @classmethod
     def register_watcher(cls, user_id: int, watcher: W):

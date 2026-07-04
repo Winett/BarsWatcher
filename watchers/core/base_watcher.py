@@ -31,6 +31,10 @@ class BaseWatcher(ABC):
         self._is_pausing = False
         self._task: Optional[asyncio.Task] = None
 
+        # asyncio.Event: True = сервер доступен, False = недоступен
+        self._server_available = asyncio.Event()
+        self._server_available.set()  # По умолчанию доступен
+
         self._logger_template = f"{self.__class__.__name__:^10} | {credentials.username:^10} | "
 
         self._register_instance()
@@ -67,6 +71,12 @@ class BaseWatcher(ABC):
 
         try:
             while self._is_running:
+                # Ждём доступности сервера (если недоступен)
+                if not self._server_available.is_set():
+                    logger.info(f"{self._logger_template} Сервер недоступен, ожидание...")
+                    await self._server_available.wait()
+                    logger.info(f"{self._logger_template} Сервер доступен, возобновление работы")
+
                 iteration += 1
                 logger.debug(f"{self._logger_template} ── Итерация #{iteration} ──")
                 try:
@@ -183,6 +193,16 @@ class BaseWatcher(ABC):
         if not self._is_pausing:
             self._stats.status = WatcherStatus.STOPPED
         self._is_pausing = False
+
+    def on_server_available(self):
+        """Вызывается когда сервер становится доступным."""
+        logger.debug(f"{self._logger_template} Сервер доступен → event.set()")
+        self._server_available.set()
+
+    def on_server_unavailable(self):
+        """Вызывается когда сервер становится недоступным."""
+        logger.debug(f"{self._logger_template} Сервер недоступен → event.clear()")
+        self._server_available.clear()
 
     async def restart(self):
         logger.info(f"{self._logger_template} Перезапуск")
