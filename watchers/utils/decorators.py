@@ -4,7 +4,7 @@ import time
 from typing import Callable, Any
 
 from loguru import logger
-from watchers.utils.exceptions import AuthError, RequestVerificationTokenError
+from watchers.core.exceptions import AuthError, RequestVerificationTokenError
 
 
 def retry(max_attempts: int = 3, delays: tuple = (1, 2, 5), exclude_exceptions: tuple = (AuthError, )):

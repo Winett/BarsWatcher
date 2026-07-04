@@ -12,6 +12,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from watchers.connectors.connection_monitor import BarsMonitor, OsepMonitor
 from watchers.managers.watcher_manager import OsepWatcherManager, BarsWatcherManager
 from watchers.services.cache_service import AsyncFileCacher
+from watchers.session.pool_session import PoolSession
 from webhook import create_prepared_webapp, WEBHOOK_HOST, WEBHOOK_PORT
 
 from settings import settings, WORKDIR
@@ -48,7 +49,6 @@ def create_dispatcher() -> Dispatcher:
 
 
 (WORKDIR / "sessions").mkdir(exist_ok=True, parents=True)
-# BaseAuth.session_dir = Path(__file__).parent / "sessions"
 
 
 async def on_bot_startup(bot: Bot):
@@ -92,6 +92,9 @@ async def on_bot_shutdown(*args, **kwargs):
     await BarsMonitor().close()
     await OsepMonitor().close()
 
+    # Закрываем все сессии в пуле
+    await PoolSession.release_all()
+
 async def setup_webhook(bot: Bot) -> bool:
     url = f"{WEBHOOK_BASE_URL}{WEBHOOK_PATH}"
 
@@ -122,11 +125,7 @@ async def main():
     dp = create_dispatcher()
     dp.startup.register(on_bot_startup)
     dp.shutdown.register(on_bot_shutdown)
-    # app = create_prepared_webapp(bot, dp)
-    #
-    # web.run_app(app, host=WEBHOOK_HOST, port=WEBHOOK_PORT)
-    # await bot.delete_webhook(drop_pending_updates=True)
-    # await dp.start_polling(bot)
+
     loop = asyncio.get_event_loop().set_debug(True)
     try:
         set_webhook = await setup_webhook(bot)
@@ -162,7 +161,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    # main()
-
-
-

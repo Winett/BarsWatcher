@@ -8,7 +8,7 @@ from typing import List, Callable, Awaitable, Optional
 from watchers.models.connection_monitor_models import ConnectionStatus, ConnectionMetrics, ConnectionMonitorConfig
 from loguru import logger
 
-from watchers.services.event_service import EventService
+from watchers.core.event_service import EventService
 
 
 

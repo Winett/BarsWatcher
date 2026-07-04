@@ -1,37 +1,40 @@
-import re
 import json
+import re
 from datetime import datetime
 
-from watchers.models.mark_models import Mark, DisciplineMarks, RewritingMark
-from watchers.utils.exceptions import StudentIdGettingError, DataParsingError
-from watchers.models.watcher_models import UserCredentials
-from watchers.connectors.bars_connector import BarsConnector
-from bs4 import BeautifulSoup
+from loguru import logger
 
-class BarsFetcher(BarsConnector):
-    instances = {}
-    def __init__(self, credentials: UserCredentials, timeout: int = 30, student_id: str | None = None):
-        super().__init__(credentials, "https://bars.mpei.ru/bars_web", timeout)
-        self._student_id: str | None = student_id
-        self.instances[credentials.user_id] = self
+from watchers.api.base_api import BaseAPI
+from watchers.auth.bars_auth import BarsAuth
+from watchers.core.exceptions import DataParsingError, StudentIdGettingError
+from watchers.models.mark_models import DisciplineMarks, Mark, RewritingMark
+from watchers.utils.rate_limiter import RateLimiter
 
-    @classmethod
-    def get_fetcher_instance(cls, user_id):
-        return cls.instances.get(user_id)
+_rate_limit_fetcher = RateLimiter(max_requests=30, period_seconds=1)
 
-    async def close(self):
-        if self.instances.get(self.credentials.user_id):
-            del self.instances[self.credentials.user_id]
-        await super().close()
+
+class BarsAPI(BaseAPI):
+    """API методы для БАРС (оценки)"""
+
+    BASE_URL = "https://bars.mpei.ru/bars_web"
+
+    def __init__(self, auth: BarsAuth):
+        super().__init__(auth, self.BASE_URL)
+        self._student_id: str | None = None
 
     async def get_student_id(self) -> str:
         if self._student_id:
             return self._student_id
-
         content = (await self._request_with_authorization(endpoint="/ST/Student/ListStudent")).decode()
-        student_id = re.search(r'studentID=([\w]{8}-[\w]{4}-[\w]{4}-[\w]{4}-[\w]{12})', content)
+        student_id = re.search(
+            r'studentID=([\w]{8}-[\w]{4}-[\w]{4}-[\w]{4}-[\w]{12})',
+            content
+        )
         if not student_id:
-            raise StudentIdGettingError("Ошибка получения параметра student_id", content=content)
+            raise StudentIdGettingError(
+                "Ошибка получения параметра student_id",
+                content=content
+            )
         self._student_id = student_id.group(1)
         return self._student_id
 
@@ -45,7 +48,8 @@ class BarsFetcher(BarsConnector):
         else:
             return (datetime.now().year - year) * 2 - 1 + autumn_25_26
 
-    async def get_bars_marks(self):
+    @_rate_limit_fetcher
+    async def get_marks(self) -> str:
         student_id = await self.get_student_id()
         semester_id = self.get_semester_id()
         query = {
@@ -55,10 +59,14 @@ class BarsFetcher(BarsConnector):
             }
         }
         params = {'studentID': student_id, "query": json.dumps(query)}
-        return await self._request_with_authorization(endpoint="/ST_Study/Student_SemesterSheet/_PartialListStudent_SemesterSheet__Mark", params=params)
+        return (await self._request_with_authorization(
+            endpoint="/ST_Study/Student_SemesterSheet/_PartialListStudent_SemesterSheet__Mark",
+            params=params
+        )).decode()
 
     @staticmethod
     def parse_marks(html) -> dict[str, DisciplineMarks]:
+        from bs4 import BeautifulSoup
         soup = BeautifulSoup(html, 'html.parser')
         disciplines = soup.find_all("div", attrs={"class": "my-2"})
         data = {}
@@ -80,7 +88,6 @@ class BarsFetcher(BarsConnector):
                     continue
 
                 table_id = href[1:]
-
                 table_div = soup.find("div", attrs={"id": table_id})
                 if not table_div:
                     continue
@@ -105,9 +112,6 @@ class BarsFetcher(BarsConnector):
                         continue
 
                     km_name_text = cells[0].text.strip()
-                    # Проверка что это КМ
-                    # if not km_name_text or "КМ" not in km_name_text:
-                    #     continue
 
                     try:
                         weight = cells[1].text.strip()
@@ -118,27 +122,22 @@ class BarsFetcher(BarsConnector):
                         mark_text = cells[3].text.strip()
 
                         if mark_text:
-                            # Формат: "4  (04.10.25)"
                             parts = mark_text.split("(")
                             mark_value = parts[0].strip()
                             date_of_mark = parts[1].replace(")", "").strip().split()[0] if len(parts) > 1 else ""
 
-                            # mark = Mark(mark=mark_value, date=datetime.strptime(date_of_mark, "%d.%m.%y"))
                             mark = Mark(mark=mark_value, date=date_of_mark)
 
-                            # Проверка переписываний
                             spans = cells[3].find_all("span")
                             attempt = 1
                             for span in spans:
                                 rewrite_text = span.text.strip()
                                 if rewrite_text:
-                                    # Формат: "2 (14.03.24)"
                                     rewrite_parts = rewrite_text.split("(")
                                     if len(rewrite_parts) >= 2:
                                         rewrite_mark = rewrite_parts[0].strip().split()[-1]
                                         rewrite_date = rewrite_parts[1].replace(")", "").strip()
                                         mark.rewriting.append(
-                                            # RewritingMark(mark=rewrite_mark, date=datetime.strptime(rewrite_date, "%d.%m.%y"))
                                             RewritingMark(mark=rewrite_mark, date=rewrite_date, attempt=attempt)
                                         )
                                         attempt += 1
@@ -148,14 +147,13 @@ class BarsFetcher(BarsConnector):
                         marks.append(mark)
                         km_index += 1
 
-                    except Exception as e:
+                    except Exception:
                         continue
 
-                # Получение итоговых оценок
                 mark_PA = ""
                 mark_final = ""
 
-                for row in rows[-3:]:  # Последние 3 строки
+                for row in rows[-3:]:
                     cells = row.find_all("td")
                     if len(cells) >= 2:
                         text = cells[0].text.strip() if len(cells) > 0 else ""
@@ -173,11 +171,7 @@ class BarsFetcher(BarsConnector):
                     mark_final=mark_final
                 )
 
-            except Exception as e:
+            except Exception:
                 continue
 
         return data
-
-
-
-

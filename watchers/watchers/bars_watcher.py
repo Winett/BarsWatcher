@@ -1,76 +1,65 @@
 from datetime import datetime
 from typing import Dict, List, Optional
 
-
-from watchers.core.base_watcher import BaseWatcher
-from watchers.models.watcher_models import WatcherType, UserCredentials, WatcherConfig
-from watchers.models.mark_models import DisciplineMarks
-from loguru import logger
-
-from watchers.services.cache_service import AsyncFileCacher, FileCache
-from watchers.fetchers.bars_fetcher import BarsFetcher
-from watchers.services.notification_service import BaseNotificationService
-
 from hashlib import md5
 
+from loguru import logger
+
+from watchers.core.base_watcher import BaseWatcher
+from watchers.models.watcher_models import UserCredentials, WatcherConfig
+from watchers.models.mark_models import DisciplineMarks
+from watchers.services.cache_service import AsyncFileCacher
+from watchers.api.bars_api import BarsAPI
 from watchers.managers.watcher_manager import BarsWatcherManager
-from watchers.utils.exceptions import DataParsingError
+from watchers.core.exceptions import DataParsingError
 
 
 class BarsWatcher(BaseWatcher):
-    def __init__(self,
-                 credentials: UserCredentials,
-                 fetcher_service: BarsFetcher,
-                 cache_service: AsyncFileCacher,
-                 # notification_service: BaseNotificationService,
-                 config: Optional[WatcherConfig] = None,
-                 student_id: Optional[str] = None,
-                 ):
-        super().__init__(credentials, cache_service,
-                         # notification_service,
-                         config)
-        # self.fetcher_service = BarsFetcher(credentials, student_id=student_id)
-        self.fetcher_service = fetcher_service
-        original_login = self.fetcher_service.login
-
-        async def wrapped_login(*args, **kwargs):
-            self._stats.last_auth_time = datetime.now()
-            return await original_login(*args, **kwargs)
-        self.fetcher_service.login = wrapped_login
-        # self.marks_url_endpoint = "/ST_Study/Student_SemesterSheet/_PartialListStudent_SemesterSheet__Mark"
-        # self.student_id_url_endpoint = "/ST/Student/ListStudent"
-        self._student_id: Optional[str] = student_id
-
+    def __init__(
+        self,
+        credentials: UserCredentials,
+        api: BarsAPI,
+        cache_service: AsyncFileCacher,
+        config: Optional[WatcherConfig] = None,
+    ):
+        super().__init__(credentials, cache_service, config)
+        self.api = api
         self._last_process_data = None
         self._last_process_data_hash = None
 
     def _register_instance(self):
         BarsWatcherManager.register_watcher(self.credentials.user_id, self)
+        logger.debug(f"{self._logger_template} Зарегистрирован в BarsWatcherManager")
 
-    async def fetch_data(self) -> str | bytes:
-        return await self.fetcher_service.get_bars_marks()
+    async def fetch_data(self) -> str:
+        logger.debug(f"{self._logger_template} bars_api.get_marks()...")
+        data = await self.api.get_marks()
+        logger.debug(f"{self._logger_template} bars_api.get_marks() OK | size={len(data)} bytes")
+        return data
 
-    async def process_data(self, data: str | bytes) -> dict[str, DisciplineMarks]:
+    async def process_data(self, data: str) -> dict[str, DisciplineMarks]:
         new_hash = md5(data.encode(errors="ignore")).hexdigest()
         if self._last_process_data_hash:
             if new_hash == self._last_process_data_hash:
+                logger.debug(f"{self._logger_template} Данные не изменились (hash={new_hash[:8]}...), кэш")
                 return self._last_process_data
+        logger.debug(f"{self._logger_template} Новый hash={new_hash[:8]}..., парсинг...")
         try:
-            self._last_process_data = self.fetcher_service.parse_marks(data)
+            self._last_process_data = self.api.parse_marks(data)
         except Exception:
-            raise DataParsingError(f"Ошибка парсинга данных у {self.credentials.username} <code>{self.credentials.user_id}</code>", content=data)
+            raise DataParsingError(
+                f"Ошибка парсинга данных у {self.credentials.username} <code>{self.credentials.user_id}</code>",
+                content=data
+            )
         self._last_process_data_hash = new_hash
-
+        disciplines_count = len(self._last_process_data)
+        logger.debug(f"{self._logger_template} Парсинг OK | дисциплин: {disciplines_count}")
         return self._last_process_data
-
-    async def _iteration(self):
-        # logger.debug(f"{self._logger_template} Начало итерации")
-        # logger.info(f"{self._logger_template} {self.student_id = } {self._last_process_data_hash = }")
-        await super()._iteration()
 
     async def detect_changes(self, old_data: dict, new_data: dict) -> List[str]:
         """Обнаружение изменений в оценках"""
         if not old_data or not new_data or old_data is new_data:
+            logger.debug(f"{self._logger_template} detect_changes: нет данных для сравнения")
             return []
 
         old_data = {k: DisciplineMarks(**v) for k, v in old_data.items()}
@@ -80,11 +69,11 @@ class BarsWatcher(BaseWatcher):
             old_discipline = old_data.get(discipline_name)
 
             if not old_discipline:
-                # changes.append(f"Добавлена дисциплина {discipline_name}")
                 continue
 
             changes.extend(self._compare_disciplines(old_discipline, new_discipline))
 
+        logger.debug(f"{self._logger_template} detect_changes: {len(changes)} изменений")
         return changes
 
     def _compare_disciplines(self, old: DisciplineMarks, new: DisciplineMarks) -> list[str]:
@@ -96,40 +85,27 @@ class BarsWatcher(BaseWatcher):
                 if not old_mark.mark:
                     changes.append(f"Оценка по {old.name} КМ-{i + 1}: {new_mark.mark}")
                 else:
-                    # Если изменилась оценка или дата оценки, и при этом изменилось количество переписываний, то это оценка, скорее всего, за переписывание
                     if len(old_mark.rewriting) != len(new_mark.rewriting):
                         changes.append(f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_mark.mark}")
                     else:
                         changes.append(f"Изменилась оценка по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_mark.mark}")
-                # Если оценка за переписывание отлична от изначальной оценки => она будет записана
-                # в основной блок оценки, и проверять переписывания смысла нет
                 continue
 
-            # Сравнение переписываний
             if len(old_mark.rewriting) != len(new_mark.rewriting):
-                # for rewrite in range(1, len(new_mark.rewriting) - len(old_mark.rewriting) + 1):
                 for rewrite in range(len(new_mark.rewriting) - len(old_mark.rewriting), 0, -1):
-                    changes.append(f"Переписывание по {old.name} КМ-{i + 1}: -> {new_mark.rewriting[-rewrite].mark}") # Последние оценки - последние переписывания
+                    changes.append(f"Переписывание по {old.name} КМ-{i + 1}: -> {new_mark.rewriting[-rewrite].mark}")
 
             for j in range(min(len(old_mark.rewriting), len(new_mark.rewriting))):
                 if old_mark.rewriting[j].mark != new_mark.rewriting[j].mark:
                     changes.append(f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.rewriting[j].mark} -> {new_mark.rewriting[j].mark}")
 
-
-        # Сравнение итоговых оценок
         if old.mark_final != new.mark_final:
             changes.append(f"Изменилась итоговая оценка по {old.name}: {old.mark_final} -> {new.mark_final}")
 
         return changes
 
-    @property
-    def student_id(self) -> Optional[str]:
-        return self.fetcher_service._student_id
-
-    async def _get_student_id(self) -> str:
-        """Получение student_id"""
-        return await self.fetcher_service.get_student_id()
-
     async def close(self):
-        await self.fetcher_service.close()
-
+        from watchers.session.pool_session import PoolSession
+        logger.debug(f"{self._logger_template} Закрытие сессии...")
+        await PoolSession.release(self.credentials.user_id, "bars")
+        logger.debug(f"{self._logger_template} Сессия закрыта")

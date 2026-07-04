@@ -16,12 +16,12 @@ from states.getuserState import GetUserState
 from watchers import WatcherType
 from watchers.models.watcher_models import UserCredentials
 from watchers.services.cache_service import AsyncFileCacher
-# from watchers.notificator import OsepNotificator, BarsNotificator
+from watchers.services.watcher_factory import WatcherFactory
+from watchers.session.pool_session import PoolSession
+from watchers.core.exceptions import Auth2FA
 from watchers.watchers import OsepWatcher, BarsWatcher
 from watchers.managers.watcher_manager import BarsWatcherManager, OsepWatcherManager
 
-from watchers.fetchers.bars_fetcher import BarsFetcher
-from watchers.utils.exceptions import Auth2FA
 router = Router(name=__name__)
 
 
@@ -94,7 +94,7 @@ async def get_user_id_command(msg: Message, state: FSMContext, session: sessionm
     user_service = UserService(session)
     user = await user_service.find_user(int(msg.text))
     if user is None:
-        await msg.answer('Пользователь не найден!')
+        await msg.answer('Пользователь не найден!')
         return
 
     bars_watcher = BarsWatcherManager.get_watcher_instance(user.user_id)
@@ -126,60 +126,54 @@ async def change_watching(msg: CallbackQuery, state: FSMContext, session: sessio
         return
     if msg.data.startswith('watching_osep_'):
         try:
-            # manager = WatcherManagerFactory.get_manager(OsepWatcher)
-            # osep_watcher = OsepWatcher(user.osep_login, user.osep_password, user.user_id, TelegramNotificator(user.user_id))
-            osep_watcher = OsepWatcher(
-                credentials=UserCredentials(username=user.osep_login, password=user.osep_password, user_id=user.user_id, watcher_type=WatcherType.OSEP),
-                cache_service = AsyncFileCacher(WORKDIR / "cache.json")
+            # Создаём auth и логинимся
+            auth, session_obj = WatcherFactory.create_auth_and_session(
+                user_id=user.user_id,
+                service="osep",
+                login=user.osep_login,
+                password=user.osep_password,
+                watcher_type=WatcherType.OSEP
             )
-            # manager.add(user.user_id, osep_watcher)
+            res = await auth.login()
+            if not res:
+                await msg.answer("Не удалось авторизоваться у пользователя")
+                return
+
+            cache = AsyncFileCacher(WORKDIR / "cache.json")
+            osep_watcher = WatcherFactory.create_osep_watcher(user.user_id, auth, cache)
             await osep_watcher.start()
             await user_service.set_osep_status_used(user.user_id, True)
-            # if await manager.start(user.user_id):
-            #     user.used_osep = True
-            #     await user_service.set_osep_status_used(user.user_id, True)
-            # else:
-            #     await msg.answer("Произошла ошибка при включении отслеживания ОСЭП", show_alert=True)
-        except TypeError as e: #если логин или пароль None
+        except TypeError as e:
             await msg.answer("Произошла ошибка при включении отслеживания ОСЭП", show_alert=True)
     elif msg.data.startswith('dont_watching_osep_'):
-        # manager = WatcherManagerFactory.get_manager(OsepWatcher)
-        # await manager.stop(msg.from_user.id)
-        await OsepWatcherManager.get_watcher_instance(user.user_id).stop()
-        OsepWatcherManager.unregister_watcher(user.user_id)
-        # OsepNotificator.stop_watching(user.user_id)
-        # user.used_osep = False
+        await OsepWatcherManager.stop_and_delete(user.user_id)
         await user_service.set_osep_status_used(user.user_id, False)
     elif msg.data.startswith('watching_bars_'):
         try:
-            # manager = WatcherManagerFactory.get_manager(BarsWatcher)
-            user_creds = UserCredentials(username=user.bars_login, password=user.bars_password, user_id=user.user_id, watcher_type=WatcherType.BARS)
-            bars_connector = BarsFetcher(user_creds)
+            # Создаём auth и логинимся
+            auth, session_obj = WatcherFactory.create_auth_and_session(
+                user_id=user.user_id,
+                service="bars",
+                login=user.bars_login,
+                password=user.bars_password,
+                watcher_type=WatcherType.BARS
+            )
             try:
-                res = await bars_connector.login()
+                res = await auth.login()
             except Auth2FA as e:
                 await msg.answer("Включена 2FA, не удаётся авторизоваться")
                 return
             if not res:
                 await msg.answer("Не удалось авторизоваться у пользователя")
-            bars_watcher = BarsWatcher(
-                credentials=user_creds,
-                fetcher_service=bars_connector,
-                cache_service = AsyncFileCacher(WORKDIR / "cache.json")
-            )
-            # manager.add(user.user_id, bars_watcher)
+
+            cache = AsyncFileCacher(WORKDIR / "cache.json")
+            bars_watcher = WatcherFactory.create_bars_watcher(user.user_id, auth, cache)
             await bars_watcher.start()
             await user_service.set_bars_status_used(user.user_id, True)
-            # if await manager.start(user.user_id):
-            #     user.used_bars = True
-            #     await user_service.set_bars_status_used(user.user_id, True)
-            # else:
-            #     await msg.answer("Произошла ошибка при включении отслеживания БАРС", show_alert=True)
-        except TypeError as e: #если логин или пароль None
+        except TypeError as e:
             await msg.answer("Произошла ошибка при включении отслеживания БАРС", show_alert=True)
     elif msg.data.startswith('dont_watching_bars_'):
         await BarsWatcherManager.stop_and_delete(user.user_id)
-        user.used_bars = False
         await user_service.set_bars_status_used(user.user_id, False)
 
     await refresh_user_state_massage(msg, user)
