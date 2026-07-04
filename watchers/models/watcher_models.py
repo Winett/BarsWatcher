@@ -78,6 +78,18 @@ class WatcherConfig:
         ])
 
 
+@dataclass
+class BarsWatcherConfig:
+    """Настройки, специфичные для BarsWatcher."""
+    show_marks: bool = True
+
+
+@dataclass
+class OsepWatcherConfig:
+    """Настройки, специфичные для OsepWatcher."""
+    blacklist: List[str] = field(default_factory=list)
+
+
 class UserCredentials(BaseModel):
     username: str
     password: str

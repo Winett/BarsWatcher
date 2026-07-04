@@ -3,13 +3,14 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from hashlib import md5
 from pathlib import Path
+import fnmatch
 
 import aiofiles
 from loguru import logger
 
 from watchers.core.base_watcher import BaseWatcher
 from watchers.core.event_service import EventService
-from watchers.models.watcher_models import UserCredentials, WatcherConfig, WatcherType, EventType
+from watchers.models.watcher_models import UserCredentials, WatcherConfig, WatcherType, EventType, OsepWatcherConfig
 from watchers.models.mail_models import (
     MailMessage, AttachmentData, Folder, Folders, NewMailEvent
 )
@@ -27,10 +28,20 @@ class OsepWatcher(BaseWatcher):
         cache_service: AsyncFileCacher,
         config: Optional[WatcherConfig] = None,
         config_service=None,
+        osep_config: Optional[OsepWatcherConfig] = None,
     ):
         super().__init__(credentials, cache_service, config, config_service)
         self.api = api
+        self.osep_config = osep_config or OsepWatcherConfig()
         self._folders_cache_key = f"osep_folders_{self.credentials.username}"
+
+    def _is_blacklisted(self, email: str) -> bool:
+        """Проверить, есть ли email в blacklist (с поддержкой wildcard *)."""
+        email_lower = email.lower()
+        for pattern in self.osep_config.blacklist:
+            if fnmatch.fnmatch(email_lower, pattern.lower()):
+                return True
+        return False
 
     def _register_instance(self):
         OsepWatcherManager.register_watcher(self.credentials.user_id, self)
@@ -117,6 +128,15 @@ class OsepWatcher(BaseWatcher):
         try:
             items = await self.api.get_conversation_items(conversation_id)
             new_message = items.conversation_nodes[0].items[0]
+
+            sender_email = new_message.from_.mail_box.email_address
+
+            # Проверка blacklist
+            if self._is_blacklisted(sender_email):
+                logger.info(
+                    f"{self._logger_template} Письмо от {sender_email} пропущено (blacklist)"
+                )
+                return
 
             logger.debug(
                 f"{self._logger_template} Письмо: от={new_message.from_.mail_box.name} "

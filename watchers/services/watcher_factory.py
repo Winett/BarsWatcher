@@ -36,12 +36,15 @@ class WatcherFactory:
         )
 
         config = None
+        bars_config = None
         if cls._config_service:
             config = await cls._config_service.resolve_config(user_id)
+            bars_config = await cls._config_service.resolve_bars_config(user_id)
 
         return BarsWatcher(
             credentials=creds, api=api, cache_service=cache,
-            config=config, config_service=cls._config_service
+            config=config, config_service=cls._config_service,
+            bars_config=bars_config
         )
 
     @classmethod
@@ -61,12 +64,15 @@ class WatcherFactory:
         )
 
         config = None
+        osep_config = None
         if cls._config_service:
             config = await cls._config_service.resolve_config(user_id)
+            osep_config = await cls._config_service.resolve_osep_config(user_id)
 
         return OsepWatcher(
             credentials=creds, api=api, cache_service=cache,
-            config=config, config_service=cls._config_service
+            config=config, config_service=cls._config_service,
+            osep_config=osep_config
         )
 
     @staticmethod

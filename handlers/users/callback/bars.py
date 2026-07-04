@@ -94,6 +94,10 @@ async def bars_password_command(msg: Message, state: FSMContext, session: sessio
         logger.debug(f"Пользователь {msg.from_user.id} {msg.from_user.username} ожидает 2FA код")
         await msg.answer("Введите код 2FA")
         return
+    except Exception as e:
+        logger.error(f"Ошибка авторизации БАРС для {msg.from_user.id}: {e}")
+        await msg.answer("Произошла ошибка при авторизации. Попробуйте позже.")
+        return
 
     if not res:
         await msg.answer("Неверный логин или пароль")
@@ -168,6 +172,10 @@ async def watching_bars_command(msg: CallbackQuery, state: FSMContext, session: 
         await state.update_data(bars_auth=auth)
         logger.debug(f"Пользователь {msg.from_user.id} {msg.from_user.username} ожидает 2FA код")
         await msg.message.answer("Введите код 2FA")
+        return
+    except Exception as e:
+        logger.error(f"Ошибка авторизации БАРС для {msg.from_user.id}: {e}")
+        await msg.answer("Произошла ошибка при авторизации. Попробуйте позже.")
         return
 
     if not res:

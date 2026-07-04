@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from loguru import logger
 
 from database.models import GlobalConfig, UserConfig
-from watchers.models.watcher_models import WatcherConfig
+from watchers.models.watcher_models import WatcherConfig, BarsWatcherConfig, OsepWatcherConfig
 
 
 class ConfigService:
@@ -71,8 +71,7 @@ class ConfigService:
     async def resolve_config(self, user_id: int) -> WatcherConfig:
         """Собрать финальный WatcherConfig для конкретного пользователя.
 
-        Приоритет: UserConfig.poll_interval → GlobalConfig.poll_interval → дефолт.
-        Всегда >= MIN_POLL_INTERVAL.
+        Приоритет: UserConfig → GlobalConfig → дефолт WatcherConfig.
         """
         global_cfg = await self.get_global()
         user_cfg = await self.get_user(user_id)
@@ -80,13 +79,39 @@ class ConfigService:
         poll = global_cfg.poll_interval
         if user_cfg and user_cfg.poll_interval is not None:
             poll = user_cfg.poll_interval
-
         poll = max(poll, self.MIN_POLL_INTERVAL)
 
         return WatcherConfig(
             poll_interval=poll,
             timeout=global_cfg.timeout,
         )
+
+    async def resolve_bars_config(self, user_id: int) -> BarsWatcherConfig:
+        """Собрать BarsWatcherConfig для конкретного пользователя.
+
+        Дефолт: show_marks=True. Персональная настройка переопределяет.
+        """
+        user_cfg = await self.get_user(user_id)
+
+        show_marks = True  # дефолт
+        if user_cfg and user_cfg.bars_show_marks is not None:
+            show_marks = user_cfg.bars_show_marks
+
+        return BarsWatcherConfig(show_marks=show_marks)
+
+    async def resolve_osep_config(self, user_id: int) -> OsepWatcherConfig:
+        """Собрать OsepWatcherConfig для конкретного пользователя."""
+        import json
+        user_cfg = await self.get_user(user_id)
+
+        blacklist = []
+        if user_cfg and user_cfg.osep_blacklist:
+            try:
+                blacklist = json.loads(user_cfg.osep_blacklist)
+            except (json.JSONDecodeError, TypeError):
+                blacklist = []
+
+        return OsepWatcherConfig(blacklist=blacklist)
 
     async def is_auto_scale_enabled(self, user_id: int) -> bool:
         """Проверить, включена ли авто-шкалирование для пользователя."""

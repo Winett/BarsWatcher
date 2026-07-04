@@ -6,7 +6,7 @@ from hashlib import md5
 from loguru import logger
 
 from watchers.core.base_watcher import BaseWatcher
-from watchers.models.watcher_models import UserCredentials, WatcherConfig
+from watchers.models.watcher_models import UserCredentials, WatcherConfig, BarsWatcherConfig
 from watchers.models.mark_models import DisciplineMarks
 from watchers.services.cache_service import AsyncFileCacher
 from watchers.api.bars_api import BarsAPI
@@ -22,9 +22,11 @@ class BarsWatcher(BaseWatcher):
         cache_service: AsyncFileCacher,
         config: Optional[WatcherConfig] = None,
         config_service=None,
+        bars_config: Optional[BarsWatcherConfig] = None,
     ):
         super().__init__(credentials, cache_service, config, config_service)
         self.api = api
+        self.bars_config = bars_config or BarsWatcherConfig()
         self._last_process_data = None
         self._last_process_data_hash = None
 
@@ -79,29 +81,34 @@ class BarsWatcher(BaseWatcher):
 
     def _compare_disciplines(self, old: DisciplineMarks, new: DisciplineMarks) -> list[str]:
         """Сравнение двух дисциплин"""
+        hide = not self.bars_config.show_marks
         changes = []
 
         for i, (old_mark, new_mark) in enumerate(zip(old.marks, new.marks)):
             if old_mark.mark != new_mark.mark or old_mark.date != new_mark.date:
+                new_val = f"<spoiler>{new_mark.mark}</spoiler>" if hide else new_mark.mark
                 if not old_mark.mark:
-                    changes.append(f"Оценка по {old.name} КМ-{i + 1}: {new_mark.mark}")
+                    changes.append(f"Оценка по {old.name} КМ-{i + 1}: {new_val}")
                 else:
                     if len(old_mark.rewriting) != len(new_mark.rewriting):
-                        changes.append(f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_mark.mark}")
+                        changes.append(f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_val}")
                     else:
-                        changes.append(f"Изменилась оценка по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_mark.mark}")
+                        changes.append(f"Изменилась оценка по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_val}")
                 continue
 
             if len(old_mark.rewriting) != len(new_mark.rewriting):
                 for rewrite in range(len(new_mark.rewriting) - len(old_mark.rewriting), 0, -1):
-                    changes.append(f"Переписывание по {old.name} КМ-{i + 1}: -> {new_mark.rewriting[-rewrite].mark}")
+                    rw_val = f"<spoiler>{new_mark.rewriting[-rewrite].mark}</spoiler>" if hide else new_mark.rewriting[-rewrite].mark
+                    changes.append(f"Переписывание по {old.name} КМ-{i + 1}: -> {rw_val}")
 
             for j in range(min(len(old_mark.rewriting), len(new_mark.rewriting))):
                 if old_mark.rewriting[j].mark != new_mark.rewriting[j].mark:
-                    changes.append(f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.rewriting[j].mark} -> {new_mark.rewriting[j].mark}")
+                    rw_val = f"<spoiler>{new_mark.rewriting[j].mark}</spoiler>" if hide else new_mark.rewriting[j].mark
+                    changes.append(f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.rewriting[j].mark} -> {rw_val}")
 
         if old.mark_final != new.mark_final:
-            changes.append(f"Изменилась итоговая оценка по {old.name}: {old.mark_final} -> {new.mark_final}")
+            final_val = f"<spoiler>{new.mark_final}</spoiler>" if hide else new.mark_final
+            changes.append(f"Изменилась итоговая оценка по {old.name}: {old.mark_final} -> {final_val}")
 
         return changes
 

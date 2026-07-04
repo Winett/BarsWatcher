@@ -36,10 +36,11 @@ class BarsAuth(BaseAuth):
     async def _login_with_credentials(self) -> bool:
         self.session.cookie_jar.clear()
 
-        content = (await self.session.get(
+        async with self.session.get(
             f"{self.BASE_URL}/",
             allow_redirects=False
-        )).read().decode()
+        ) as response:
+            content = await response.text()
 
         search = re.search(
             r'name="__RequestVerificationToken" type="\w+" value="(.+)" \/><input',
@@ -64,11 +65,12 @@ class BarsAuth(BaseAuth):
             "Password": self.credentials.password,
             "RememberMe": True
         }
-        content = (await self.session.post(
+        async with self.session.post(
             f"{self.BASE_URL}/",
             data=data,
             allow_redirects=False
-        )).read().decode()
+        ) as response:
+            content = await response.text()
 
         cookies = self.session.cookie_jar.filter_cookies(f"{self.BASE_URL}/")
         if not cookies.get("ses_bars"):
