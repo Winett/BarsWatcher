@@ -86,7 +86,7 @@ class BarsWatcher(BaseWatcher):
 
         for i, (old_mark, new_mark) in enumerate(zip(old.marks, new.marks)):
             if old_mark.mark != new_mark.mark or old_mark.date != new_mark.date:
-                new_val = f"<spoiler>{new_mark.mark}</spoiler>" if hide else new_mark.mark
+                new_val = f"<tg-spoiler>{new_mark.mark}</tg-spoiler>" if hide else new_mark.mark
                 if not old_mark.mark:
                     changes.append(f"Оценка по {old.name} КМ-{i + 1}: {new_val}")
                 else:
@@ -98,16 +98,16 @@ class BarsWatcher(BaseWatcher):
 
             if len(old_mark.rewriting) != len(new_mark.rewriting):
                 for rewrite in range(len(new_mark.rewriting) - len(old_mark.rewriting), 0, -1):
-                    rw_val = f"<spoiler>{new_mark.rewriting[-rewrite].mark}</spoiler>" if hide else new_mark.rewriting[-rewrite].mark
+                    rw_val = f"<tg-spoiler>{new_mark.rewriting[-rewrite].mark}</tg-spoiler>" if hide else new_mark.rewriting[-rewrite].mark
                     changes.append(f"Переписывание по {old.name} КМ-{i + 1}: -> {rw_val}")
 
             for j in range(min(len(old_mark.rewriting), len(new_mark.rewriting))):
                 if old_mark.rewriting[j].mark != new_mark.rewriting[j].mark:
-                    rw_val = f"<spoiler>{new_mark.rewriting[j].mark}</spoiler>" if hide else new_mark.rewriting[j].mark
+                    rw_val = f"<tg-spoiler>{new_mark.rewriting[j].mark}</tg-spoiler>" if hide else new_mark.rewriting[j].mark
                     changes.append(f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.rewriting[j].mark} -> {rw_val}")
 
         if old.mark_final != new.mark_final:
-            final_val = f"<spoiler>{new.mark_final}</spoiler>" if hide else new.mark_final
+            final_val = f"<tg-spoiler>{new.mark_final}</tg-spoiler>" if hide else new.mark_final
             changes.append(f"Изменилась итоговая оценка по {old.name}: {old.mark_final} -> {final_val}")
 
         return changes

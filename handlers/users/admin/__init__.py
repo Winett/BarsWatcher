@@ -6,6 +6,7 @@ from handlers.users.admin.admin import router as admin_router
 from handlers.users.admin.get_user import router as get_user_router
 from handlers.users.admin.get_manager_status import router as get_manager_status_router
 from handlers.users.admin.config import router as config_router
+from handlers.users.admin.test_notification import router as test_notification_router
 
 __all__ = ['router']
 
@@ -18,4 +19,5 @@ router.include_routers(
     get_user_router,
     get_manager_status_router,
     config_router,
+    test_notification_router,
 )
