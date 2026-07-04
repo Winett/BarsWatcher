@@ -26,10 +26,10 @@ class OsepWatcher(BaseWatcher):
         api: OsepAPI,
         cache_service: AsyncFileCacher,
         config: Optional[WatcherConfig] = None,
+        config_service=None,
     ):
-        super().__init__(credentials, cache_service, config)
+        super().__init__(credentials, cache_service, config, config_service)
         self.api = api
-        self.config.poll_interval = 60
         self._folders_cache_key = f"osep_folders_{self.credentials.username}"
 
     def _register_instance(self):

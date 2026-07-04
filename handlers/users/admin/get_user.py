@@ -140,7 +140,7 @@ async def change_watching(msg: CallbackQuery, state: FSMContext, session: sessio
                 return
 
             cache = AsyncFileCacher(WORKDIR / "cache.json")
-            osep_watcher = WatcherFactory.create_osep_watcher(user.user_id, auth, cache)
+            osep_watcher = await WatcherFactory.create_osep_watcher(user.user_id, auth, cache)
             await osep_watcher.start()
             await user_service.set_osep_status_used(user.user_id, True)
         except TypeError as e:
@@ -167,7 +167,7 @@ async def change_watching(msg: CallbackQuery, state: FSMContext, session: sessio
                 await msg.answer("Не удалось авторизоваться у пользователя")
 
             cache = AsyncFileCacher(WORKDIR / "cache.json")
-            bars_watcher = WatcherFactory.create_bars_watcher(user.user_id, auth, cache)
+            bars_watcher = await WatcherFactory.create_bars_watcher(user.user_id, auth, cache)
             await bars_watcher.start()
             await user_service.set_bars_status_used(user.user_id, True)
         except TypeError as e:

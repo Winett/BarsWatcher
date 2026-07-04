@@ -29,10 +29,16 @@ class WatcherManager(ABC, Generic[W]):
 
     _managers_watchers: dict[str, dict[int, BaseWatcher]] = defaultdict(dict)
     notification_service = TelegramNotificationService()
+    _config_service = None
 
-    # Конфигурация staggered resume
+    # Конфигурация staggered resume (дефолты, если нет GlobalConfig)
     STAGGER_DELAY = 2.0    # Базовая задержка между вотчерами (сек)
     STAGGER_JITTER = 3.0   # Случайный разброс (сек)
+
+    @classmethod
+    def set_config_service(cls, config_service):
+        """Установить ConfigService для менеджера."""
+        cls._config_service = config_service
 
     @classmethod
     def _get_watchers(cls) -> dict[int, W]:
@@ -82,13 +88,24 @@ class WatcherManager(ABC, Generic[W]):
         # Сначала ставим event available
         cls._set_all_server_available()
 
+        # Читаем stagger_delay и stagger_jitter из GlobalConfig (или дефолты)
+        stagger_delay = cls.STAGGER_DELAY
+        stagger_jitter = cls.STAGGER_JITTER
+        if cls._config_service:
+            try:
+                global_cfg = await cls._config_service.get_global()
+                stagger_delay = global_cfg.stagger_delay
+                stagger_jitter = global_cfg.stagger_jitter
+            except Exception as e:
+                logger.warning(f"{cls.__name__} | Не удалось загрузить stagger config: {e}")
+
         # Случайный порядок для равномерного распределения
         random.shuffle(watchers)
 
-        logger.info(f"{cls.__name__} | Staggered resume: {len(watchers)} вотчеров")
+        logger.info(f"{cls.__name__} | Staggered resume: {len(watchers)} вотчеров | delay={stagger_delay}s jitter={stagger_jitter}s")
 
         for i, watcher in enumerate(watchers):
-            delay = cls.STAGGER_DELAY + random.uniform(0, cls.STAGGER_JITTER)
+            delay = stagger_delay + random.uniform(0, stagger_jitter)
             logger.info(
                 f"{cls.__name__} | Resume {watcher.credentials.username} "
                 f"через {delay:.1f}s ({i+1}/{len(watchers)})"
@@ -212,6 +229,13 @@ class WatcherManager(ABC, Generic[W]):
             await w.resume()
             cnt += 1
         logger.info(f"{cls.__name__} | Возобновление {cnt} вотчеров")
+
+    @classmethod
+    async def refresh_all_configs(cls):
+        """Обновить конфигурацию у всех работающих вотчеров (после изменения настроек)."""
+        logger.info(f"{cls.__name__} | Обновление конфигурации у {len(cls._get_watchers())} вотчеров")
+        for watcher in cls._get_watchers().values():
+            await watcher.refresh_config()
 
     @classmethod
     async def start_all(cls):

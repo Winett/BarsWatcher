@@ -12,6 +12,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from watchers.connectors.connection_monitor import BarsMonitor, OsepMonitor
 from watchers.managers.watcher_manager import OsepWatcherManager, BarsWatcherManager
 from watchers.services.cache_service import AsyncFileCacher
+from watchers.services.watcher_factory import WatcherFactory
 from watchers.session.pool_session import PoolSession
 from webhook import create_prepared_webapp, WEBHOOK_HOST, WEBHOOK_PORT
 
@@ -20,7 +21,8 @@ from loguru import logger
 
 from handlers import router as handlers_router
 
-from database.db import init_db
+from database.db import init_db, async_session
+from database.services.config_service import ConfigService
 from middlewares.db import DatabaseMiddleware
 from middlewares.throttling import ThrottlingMiddleware
 from middlewares.logging import LoggingMiddleware
@@ -55,6 +57,14 @@ async def on_bot_startup(bot: Bot):
     logger.info('Запуск бота...')
     await init_db()
     logger.info('База данных инициализирована!')
+
+    # Инициализация ConfigService
+    config_service = ConfigService(async_session)
+    WatcherFactory.set_config_service(config_service)
+    BarsWatcherManager.set_config_service(config_service)
+    OsepWatcherManager.set_config_service(config_service)
+    logger.info('ConfigService инициализирован!')
+
     me = await bot.get_me()
     logger.info(f'Бот запущен! bot_id = {me.id} username = {me.username}')
     #===============

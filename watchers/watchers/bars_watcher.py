@@ -21,8 +21,9 @@ class BarsWatcher(BaseWatcher):
         api: BarsAPI,
         cache_service: AsyncFileCacher,
         config: Optional[WatcherConfig] = None,
+        config_service=None,
     ):
-        super().__init__(credentials, cache_service, config)
+        super().__init__(credentials, cache_service, config, config_service)
         self.api = api
         self._last_process_data = None
         self._last_process_data_hash = None

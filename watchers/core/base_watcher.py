@@ -13,6 +13,7 @@ from watchers.models.watcher_models import UserCredentials
 from watchers.core.event_service import EventService
 from watchers.core.exceptions import AuthError, Auth2FA
 from watchers.services.cache_service import AsyncFileCacher
+from watchers.services.auto_scaler import AutoScaler
 
 
 class BaseWatcher(ABC):
@@ -20,11 +21,13 @@ class BaseWatcher(ABC):
             self,
             credentials: UserCredentials,
             cache_service: AsyncFileCacher,
-            config: Optional[WatcherConfig] = None
+            config: Optional[WatcherConfig] = None,
+            config_service=None
     ):
         self.credentials = credentials
         self.cache_service = cache_service
         self.config = config or WatcherConfig()
+        self.config_service = config_service
 
         self._stats = WatcherStats()
         self._is_running = False
@@ -34,6 +37,10 @@ class BaseWatcher(ABC):
         # asyncio.Event: True = сервер доступен, False = недоступен
         self._server_available = asyncio.Event()
         self._server_available.set()  # По умолчанию доступен
+
+        # AutoScaler — создаётся при старте цикла
+        self._auto_scaler: Optional[AutoScaler] = None
+        self._auto_scale_enabled = True
 
         self._logger_template = f"{self.__class__.__name__:^10} | {credentials.username:^10} | "
 
@@ -64,6 +71,9 @@ class BaseWatcher(ABC):
 
     async def run(self):
         """Основной цикл вотчера"""
+        # Инициализация AutoScaler при старте цикла
+        await self._init_auto_scaler()
+
         logger.info(f"{self._logger_template} Цикл запущен | poll_interval={self.config.poll_interval}s")
         self._is_running = True
         self._stats.status = WatcherStatus.WORKING
@@ -81,6 +91,9 @@ class BaseWatcher(ABC):
                 logger.debug(f"{self._logger_template} ── Итерация #{iteration} ──")
                 try:
                     await self._iteration()
+                    # Успех — уменьшаем интервал если авто-шкалирование включено
+                    if self._auto_scaler and self._auto_scale_enabled:
+                        self.config.poll_interval = self._auto_scaler.on_success()
                 except asyncio.CancelledError:
                     raise
                 except (AuthError, Auth2FA) as e:
@@ -90,6 +103,9 @@ class BaseWatcher(ABC):
                 except Exception as e:
                     logger.error(f"{self._logger_template} Ошибка итерации #{iteration}: {type(e).__name__}: {e}")
                     await self._handle_error(e)
+                    # Ошибка — увеличиваем интервал если авто-шкалирование включено
+                    if self._auto_scaler and self._auto_scale_enabled:
+                        self.config.poll_interval = self._auto_scaler.on_error()
                 logger.debug(f"{self._logger_template} Итерация #{iteration} завершена | sleep {self.config.poll_interval}s")
                 await asyncio.sleep(self.config.poll_interval)
         except asyncio.CancelledError:
@@ -270,6 +286,54 @@ class BaseWatcher(ABC):
     @property
     def is_running(self) -> bool:
         return self._is_running
+
+    async def _init_auto_scaler(self):
+        """Инициализация AutoScaler при старте цикла."""
+        if self.config_service:
+            try:
+                self._auto_scale_enabled = await self.config_service.is_auto_scale_enabled(
+                    self.credentials.user_id
+                )
+                global_cfg = await self.config_service.get_global()
+                self._auto_scaler = AutoScaler(
+                    base_interval=self.config.poll_interval,
+                    max_interval=global_cfg.max_poll_interval
+                )
+                logger.debug(
+                    f"{self._logger_template} AutoScaler инициализирован | "
+                    f"base={self.config.poll_interval}s max={global_cfg.max_poll_interval}s "
+                    f"enabled={self._auto_scale_enabled}"
+                )
+            except Exception as e:
+                logger.warning(f"{self._logger_template} Не удалось инициализировать AutoScaler: {e}")
+                self._auto_scaler = None
+
+    async def refresh_config(self):
+        """Перезагрузить конфиг из БД (вызывается извне при изменении настроек)."""
+        if not self.config_service:
+            return
+
+        try:
+            new_config = await self.config_service.resolve_config(self.credentials.user_id)
+            old_interval = self.config.poll_interval
+            self.config = new_config
+            self._auto_scale_enabled = await self.config_service.is_auto_scale_enabled(
+                self.credentials.user_id
+            )
+
+            # Обновить base_interval у AutoScaler
+            if self._auto_scaler:
+                self._auto_scaler.base_interval = new_config.poll_interval
+                global_cfg = await self.config_service.get_global()
+                self._auto_scaler.max_interval = global_cfg.max_poll_interval
+
+            if old_interval != new_config.poll_interval:
+                logger.info(
+                    f"{self._logger_template} Конфиг обновлён | "
+                    f"poll_interval: {old_interval}s → {new_config.poll_interval}s"
+                )
+        except Exception as e:
+            logger.warning(f"{self._logger_template} Ошибка обновления конфига: {e}")
 
     async def close(self):
         ...

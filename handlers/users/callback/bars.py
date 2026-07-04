@@ -101,7 +101,7 @@ async def bars_password_command(msg: Message, state: FSMContext, session: sessio
 
     # Создаём watcher через фабрику
     cache = AsyncFileCacher(WORKDIR / "cache.json")
-    bars_watcher = WatcherFactory.create_bars_watcher(msg.from_user.id, auth, cache)
+    bars_watcher = await WatcherFactory.create_bars_watcher(msg.from_user.id, auth, cache)
     await bars_watcher.start()
     await user_service.set_bars_status_used(msg.from_user.id, True)
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание БАРСа!')
@@ -133,7 +133,7 @@ async def process_2fa_code_command(msg: Message, state: FSMContext, session: ses
     else:
         logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание БАРСа!')
         cache = AsyncFileCacher(WORKDIR / "cache.json")
-        bars_watcher = WatcherFactory.create_bars_watcher(msg.from_user.id, auth, cache)
+        bars_watcher = await WatcherFactory.create_bars_watcher(msg.from_user.id, auth, cache)
         await bars_watcher.start()
         await user_service.set_bars_status_used(msg.from_user.id, True)
         await msg.answer('Уведомления о БАРСе включены!')
@@ -175,7 +175,7 @@ async def watching_bars_command(msg: CallbackQuery, state: FSMContext, session: 
         return
 
     cache = AsyncFileCacher(WORKDIR / "cache.json")
-    bars_watcher = WatcherFactory.create_bars_watcher(msg.from_user.id, auth, cache)
+    bars_watcher = await WatcherFactory.create_bars_watcher(msg.from_user.id, auth, cache)
     await bars_watcher.start()
     await user_service.set_bars_status_used(msg.from_user.id, True)
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание БАРСа!')

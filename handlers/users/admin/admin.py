@@ -18,5 +18,9 @@ async def admin_command(msg: Message, state: FSMContext, session: sessionmaker):
                "/notify_all_users - уведомить всех пользователей; Требуется отправляемое сообщение\n\n"
                "Работа с пользователями:\n"
                "/get_user - получить информацию о пользователе; Требуется user_id пользователя\n"
-               "/get_manager_status - получение состояний менеджеров")
+               "/get_manager_status - получение состояний менеджеров\n\n"
+               "Настройка вотчеров:\n"
+               "/config_show - показать текущие глобальные настройки\n"
+               "/config_global - изменить глобальный параметр\n"
+               "/config_user - задать персональный параметр пользователю")
     await msg.answer(message)

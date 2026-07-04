@@ -12,8 +12,16 @@ from watchers.session.pool_session import PoolSession
 class WatcherFactory:
     """Фабрика для создания вотчеров после успешной авторизации."""
 
-    @staticmethod
-    def create_bars_watcher(
+    _config_service = None
+
+    @classmethod
+    def set_config_service(cls, config_service):
+        """Установить ConfigService для фабрики (вызывается один раз при старте)."""
+        cls._config_service = config_service
+
+    @classmethod
+    async def create_bars_watcher(
+        cls,
         user_id: int,
         auth: BarsAuth,
         cache: AsyncFileCacher
@@ -26,10 +34,19 @@ class WatcherFactory:
             user_id=user_id,
             watcher_type=WatcherType.BARS
         )
-        return BarsWatcher(credentials=creds, api=api, cache_service=cache)
 
-    @staticmethod
-    def create_osep_watcher(
+        config = None
+        if cls._config_service:
+            config = await cls._config_service.resolve_config(user_id)
+
+        return BarsWatcher(
+            credentials=creds, api=api, cache_service=cache,
+            config=config, config_service=cls._config_service
+        )
+
+    @classmethod
+    async def create_osep_watcher(
+        cls,
         user_id: int,
         auth: OsepAuth,
         cache: AsyncFileCacher
@@ -42,7 +59,15 @@ class WatcherFactory:
             user_id=user_id,
             watcher_type=WatcherType.OSEP
         )
-        return OsepWatcher(credentials=creds, api=api, cache_service=cache)
+
+        config = None
+        if cls._config_service:
+            config = await cls._config_service.resolve_config(user_id)
+
+        return OsepWatcher(
+            credentials=creds, api=api, cache_service=cache,
+            config=config, config_service=cls._config_service
+        )
 
     @staticmethod
     def create_auth_and_session(

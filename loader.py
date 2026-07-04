@@ -47,7 +47,7 @@ async def recover_notifications_over_restarting_bot(bot: Bot):
                 await user_service.set_bars_status_used(user.user_id, False)
 
         # Создаём watcher через фабрику
-        bars_watcher = WatcherFactory.create_bars_watcher(user.user_id, auth, cache)
+        bars_watcher = await WatcherFactory.create_bars_watcher(user.user_id, auth, cache)
         res = await bars_watcher.start()
         await asyncio.sleep(1)
         if i % 15 == 0:
@@ -80,7 +80,7 @@ async def recover_notifications_over_restarting_bot_osep():
             continue
 
         # Создаём watcher через фабрику
-        osep_watcher = WatcherFactory.create_osep_watcher(user.user_id, auth, cache)
+        osep_watcher = await WatcherFactory.create_osep_watcher(user.user_id, auth, cache)
         res = await osep_watcher.start()
         await asyncio.sleep(1)
         if i % 10 == 0:
