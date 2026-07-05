@@ -17,6 +17,7 @@ from watchers.models.mail_models import (
 from watchers.services.redis_cache_service import RedisCacheService
 from watchers.api.osep_api import OsepAPI
 from watchers.managers.watcher_manager import OsepWatcherManager
+from watchers.utils.file_cache_manager import FileCacheManager
 from settings import WORKDIR
 
 
@@ -164,11 +165,16 @@ class OsepWatcher(BaseWatcher):
                         )
 
                         (WORKDIR / Path("cashed_files/")).mkdir(exist_ok=True)
-                        path = WORKDIR / Path(
-                            f"cashed_files/{file_hash}_{att_data.filename}.bin"
-                        )
+                        filename = f"{file_hash}_{att_data.filename}.bin"
+                        path = WORKDIR / Path(f"cashed_files/{filename}")
                         async with aiofiles.open(path, "wb") as f:
                             await f.write(file_content)
+
+                        # Планировать удаление файла через cache_file_ttl
+                        FileCacheManager.schedule_removal(
+                            filename,
+                            ttl=int(self.config.cache_file_ttl)
+                        )
 
                         await self.cache_service.set(
                             attachment_cache_key,

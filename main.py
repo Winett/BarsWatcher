@@ -29,6 +29,7 @@ from middlewares.logging import LoggingMiddleware
 
 from services.notification import NotificationService
 from watchers.services.notification_service import TelegramNotificationService
+from watchers.utils.file_cache_manager import FileCacheManager
 
 from loader import recover_notifications_over_restarting_bot, recover_notifications_over_restarting_bot_osep
 from webhook import WEBHOOK_BASE_URL, WEBHOOK_PATH
@@ -68,8 +69,6 @@ async def on_bot_startup(bot: Bot):
     cache = RedisCacheService(settings.redis_url)
     await cache.connect()
     WatcherFactory.set_cache_service(cache)
-    BarsWatcherManager.set_config_service(cache)
-    OsepWatcherManager.set_config_service(cache)
     logger.info('RedisCacheService инициализирован!')
 
     me = await bot.get_me()
@@ -93,6 +92,9 @@ async def on_bot_startup(bot: Bot):
     ])
 
 async def on_bot_shutdown(*args, **kwargs):
+    # Отменить запланированные удаления файлов
+    await FileCacheManager.cancel_all()
+
     cache = WatcherFactory.get_cache_service()
     if cache:
         await cache.close()
