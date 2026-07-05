@@ -68,8 +68,8 @@ async def on_bot_startup(bot: Bot):
     cache = RedisCacheService(settings.redis_url)
     await cache.connect()
     WatcherFactory.set_cache_service(cache)
-    BarsWatcherManager.set_cache_service(cache)
-    OsepWatcherManager.set_cache_service(cache)
+    BarsWatcherManager.set_config_service(cache)
+    OsepWatcherManager.set_config_service(cache)
     logger.info('RedisCacheService инициализирован!')
 
     me = await bot.get_me()
