@@ -13,7 +13,7 @@ from watchers.models.watcher_models import (
     WatcherEvent, WatcherStatus, EventType
 )
 from watchers.models.connection_monitor_models import ConnectionStatus
-from watchers.services.cache_service import AsyncFileCacher
+from watchers.services.redis_cache_service import RedisCacheService
 
 
 class IntegrationWatcher(BaseWatcher):
@@ -63,8 +63,13 @@ def fast_config():
 
 
 @pytest.fixture
-def cache(tmp_path):
-    return AsyncFileCacher(filename=str(tmp_path / "cache.json"))
+def cache():
+    mock = AsyncMock(spec=RedisCacheService)
+    mock.get.return_value = None
+    mock.set.return_value = None
+    mock.delete.return_value = True
+    mock.exists.return_value = False
+    return mock
 
 
 # ─── Тест 1: DISCONNECTED → вотчер ждёт ──────────────────────────────

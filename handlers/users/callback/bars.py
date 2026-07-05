@@ -9,7 +9,6 @@ from settings import WORKDIR
 
 from states.barsState import BarsState
 from watchers.models.watcher_models import UserCredentials, WatcherType
-from watchers.services.cache_service import AsyncFileCacher
 from watchers.services.watcher_factory import WatcherFactory
 from watchers.session.pool_session import PoolSession
 from watchers.auth.bars_auth import BarsAuth
@@ -104,8 +103,7 @@ async def bars_password_command(msg: Message, state: FSMContext, session: sessio
         return
 
     # Создаём watcher через фабрику
-    cache = AsyncFileCacher(WORKDIR / "cache.json")
-    bars_watcher = await WatcherFactory.create_bars_watcher(msg.from_user.id, auth, cache)
+    bars_watcher = await WatcherFactory.create_bars_watcher(msg.from_user.id, auth)
     await bars_watcher.start()
     await user_service.set_bars_status_used(msg.from_user.id, True)
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание БАРСа!')
@@ -136,7 +134,7 @@ async def process_2fa_code_command(msg: Message, state: FSMContext, session: ses
         await PoolSession.release(msg.from_user.id, "bars")
     else:
         logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание БАРСа!')
-        cache = AsyncFileCacher(WORKDIR / "cache.json")
+        cache = WatcherFactory.get_cache_service()
         bars_watcher = await WatcherFactory.create_bars_watcher(msg.from_user.id, auth, cache)
         await bars_watcher.start()
         await user_service.set_bars_status_used(msg.from_user.id, True)
@@ -182,8 +180,7 @@ async def watching_bars_command(msg: CallbackQuery, state: FSMContext, session: 
         await msg.answer("Неверный логин или пароль")
         return
 
-    cache = AsyncFileCacher(WORKDIR / "cache.json")
-    bars_watcher = await WatcherFactory.create_bars_watcher(msg.from_user.id, auth, cache)
+    bars_watcher = await WatcherFactory.create_bars_watcher(msg.from_user.id, auth)
     await bars_watcher.start()
     await user_service.set_bars_status_used(msg.from_user.id, True)
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание БАРСа!')

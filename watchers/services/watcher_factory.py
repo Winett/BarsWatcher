@@ -1,5 +1,5 @@
 from watchers.models.watcher_models import UserCredentials, WatcherType
-from watchers.services.cache_service import AsyncFileCacher
+from watchers.services.redis_cache_service import RedisCacheService
 from watchers.watchers.bars_watcher import BarsWatcher
 from watchers.watchers.osep_watcher import OsepWatcher
 from watchers.api.bars_api import BarsAPI
@@ -13,6 +13,7 @@ class WatcherFactory:
     """Фабрика для создания вотчеров после успешной авторизации."""
 
     _config_service = None
+    _cache_service: RedisCacheService = None
 
     @classmethod
     def set_config_service(cls, config_service):
@@ -20,11 +21,21 @@ class WatcherFactory:
         cls._config_service = config_service
 
     @classmethod
+    def set_cache_service(cls, cache_service: RedisCacheService):
+        """Установить RedisCacheService для фабрики (вызывается один раз при старте)."""
+        cls._cache_service = cache_service
+
+    @classmethod
+    def get_cache_service(cls) -> RedisCacheService:
+        """Получить RedisCacheService."""
+        return cls._cache_service
+
+    @classmethod
     async def create_bars_watcher(
         cls,
         user_id: int,
         auth: BarsAuth,
-        cache: AsyncFileCacher
+        cache: RedisCacheService = None
     ) -> BarsWatcher:
         """Создание BarsWatcher после успешной авторизации в handler."""
         api = BarsAPI(auth)
@@ -41,8 +52,9 @@ class WatcherFactory:
             config = await cls._config_service.resolve_config(user_id)
             bars_config = await cls._config_service.resolve_bars_config(user_id)
 
+        cache_service = cache or cls._cache_service
         return BarsWatcher(
-            credentials=creds, api=api, cache_service=cache,
+            credentials=creds, api=api, cache_service=cache_service,
             config=config, config_service=cls._config_service,
             bars_config=bars_config
         )
@@ -52,7 +64,7 @@ class WatcherFactory:
         cls,
         user_id: int,
         auth: OsepAuth,
-        cache: AsyncFileCacher
+        cache: RedisCacheService = None
     ) -> OsepWatcher:
         """Создание OsepWatcher после успешной авторизации в handler."""
         api = OsepAPI(auth)
@@ -69,8 +81,9 @@ class WatcherFactory:
             config = await cls._config_service.resolve_config(user_id)
             osep_config = await cls._config_service.resolve_osep_config(user_id)
 
+        cache_service = cache or cls._cache_service
         return OsepWatcher(
-            credentials=creds, api=api, cache_service=cache,
+            credentials=creds, api=api, cache_service=cache_service,
             config=config, config_service=cls._config_service,
             osep_config=osep_config
         )

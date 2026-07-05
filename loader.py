@@ -6,7 +6,6 @@ from database.db import async_session
 from services.user import UserService
 from settings import WORKDIR
 from watchers.models.watcher_models import UserCredentials, WatcherType
-from watchers.services.cache_service import AsyncFileCacher
 from watchers.services.watcher_factory import WatcherFactory
 from watchers.session.pool_session import PoolSession
 from watchers.core.exceptions import Auth2FA
@@ -17,7 +16,6 @@ async def recover_notifications_over_restarting_bot(bot: Bot):
         user_service = UserService(session)
         users = await user_service.find_all_users_used_bars()
 
-    cache = AsyncFileCacher(filename=WORKDIR / "cache.json")
     logger.info(f"Всего на перезапуск БАРС - {len(users)}")
     for i, user in enumerate(users, start=1):
         logger.info(f"Перезапускаю BarsWatcher после рестарта бота для {user.user_id} {user.bars_login} ({i}/{len(users)})")
@@ -47,7 +45,7 @@ async def recover_notifications_over_restarting_bot(bot: Bot):
                 await user_service.set_bars_status_used(user.user_id, False)
 
         # Создаём watcher через фабрику
-        bars_watcher = await WatcherFactory.create_bars_watcher(user.user_id, auth, cache)
+        bars_watcher = await WatcherFactory.create_bars_watcher(user.user_id, auth)
         res = await bars_watcher.start()
         await asyncio.sleep(1)
         if i % 15 == 0:
@@ -61,7 +59,6 @@ async def recover_notifications_over_restarting_bot_osep():
         user_service = UserService(session)
         users = await user_service.find_all_users_used_osep()
 
-    cache = AsyncFileCacher(filename=WORKDIR / "cache.json")
     logger.info(f"Всего на перезапуск ОСЭП - {len(users)}")
     for i, user in enumerate(users, start=1):
         logger.info(f"Перезапускаю OsepWatcher после рестарта бота для {user.user_id} {user.osep_login} ({i}/{len(users)})")
@@ -80,7 +77,7 @@ async def recover_notifications_over_restarting_bot_osep():
             continue
 
         # Создаём watcher через фабрику
-        osep_watcher = await WatcherFactory.create_osep_watcher(user.user_id, auth, cache)
+        osep_watcher = await WatcherFactory.create_osep_watcher(user.user_id, auth)
         res = await osep_watcher.start()
         await asyncio.sleep(1)
         if i % 10 == 0:

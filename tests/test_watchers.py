@@ -10,7 +10,7 @@ from watchers.models.watcher_models import (
     UserCredentials, WatcherConfig, WatcherType,
     WatcherEvent, WatcherStatus, EventType
 )
-from watchers.services.cache_service import AsyncFileCacher
+from watchers.services.redis_cache_service import RedisCacheService
 
 
 # ─── Concrete test watcher ────────────────────────────────────────────
@@ -62,8 +62,13 @@ def fast_config():
 
 
 @pytest.fixture
-def cache(tmp_path):
-    return AsyncFileCacher(filename=str(tmp_path / "test_cache.json"))
+def cache():
+    mock = AsyncMock(spec=RedisCacheService)
+    mock.get.return_value = None
+    mock.set.return_value = None
+    mock.delete.return_value = True
+    mock.exists.return_value = False
+    return mock
 
 
 # ─── Тест 1: Запуск вотчера, работает до ручной остановки ─────────────

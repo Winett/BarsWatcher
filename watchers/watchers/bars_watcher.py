@@ -8,7 +8,7 @@ from loguru import logger
 from watchers.core.base_watcher import BaseWatcher
 from watchers.models.watcher_models import UserCredentials, WatcherConfig, BarsWatcherConfig
 from watchers.models.mark_models import DisciplineMarks
-from watchers.services.cache_service import AsyncFileCacher
+from watchers.services.redis_cache_service import RedisCacheService
 from watchers.api.bars_api import BarsAPI
 from watchers.managers.watcher_manager import BarsWatcherManager
 from watchers.core.exceptions import DataParsingError
@@ -19,7 +19,7 @@ class BarsWatcher(BaseWatcher):
         self,
         credentials: UserCredentials,
         api: BarsAPI,
-        cache_service: AsyncFileCacher,
+        cache_service: RedisCacheService,
         config: Optional[WatcherConfig] = None,
         config_service=None,
         bars_config: Optional[BarsWatcherConfig] = None,

@@ -15,7 +15,6 @@ from settings import WORKDIR
 from states.getuserState import GetUserState
 from watchers import WatcherType
 from watchers.models.watcher_models import UserCredentials
-from watchers.services.cache_service import AsyncFileCacher
 from watchers.services.watcher_factory import WatcherFactory
 from watchers.session.pool_session import PoolSession
 from watchers.core.exceptions import Auth2FA
@@ -139,8 +138,7 @@ async def change_watching(msg: CallbackQuery, state: FSMContext, session: sessio
                 await msg.answer("Не удалось авторизоваться у пользователя")
                 return
 
-            cache = AsyncFileCacher(WORKDIR / "cache.json")
-            osep_watcher = await WatcherFactory.create_osep_watcher(user.user_id, auth, cache)
+            osep_watcher = await WatcherFactory.create_osep_watcher(user.user_id, auth)
             await osep_watcher.start()
             await user_service.set_osep_status_used(user.user_id, True)
         except TypeError as e:
@@ -166,8 +164,7 @@ async def change_watching(msg: CallbackQuery, state: FSMContext, session: sessio
             if not res:
                 await msg.answer("Не удалось авторизоваться у пользователя")
 
-            cache = AsyncFileCacher(WORKDIR / "cache.json")
-            bars_watcher = await WatcherFactory.create_bars_watcher(user.user_id, auth, cache)
+            bars_watcher = await WatcherFactory.create_bars_watcher(user.user_id, auth)
             await bars_watcher.start()
             await user_service.set_bars_status_used(user.user_id, True)
         except TypeError as e:

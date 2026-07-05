@@ -12,7 +12,7 @@ from watchers.models.watcher_models import (
 from watchers.models.watcher_models import UserCredentials
 from watchers.core.event_service import EventService
 from watchers.core.exceptions import AuthError, Auth2FA
-from watchers.services.cache_service import AsyncFileCacher
+from watchers.services.redis_cache_service import RedisCacheService
 from watchers.services.auto_scaler import AutoScaler
 
 
@@ -20,7 +20,7 @@ class BaseWatcher(ABC):
     def __init__(
             self,
             credentials: UserCredentials,
-            cache_service: AsyncFileCacher,
+            cache_service: RedisCacheService,
             config: Optional[WatcherConfig] = None,
             config_service=None
     ):

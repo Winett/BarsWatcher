@@ -14,7 +14,7 @@ from watchers.models.watcher_models import UserCredentials, WatcherConfig, Watch
 from watchers.models.mail_models import (
     MailMessage, AttachmentData, Folder, Folders, NewMailEvent
 )
-from watchers.services.cache_service import AsyncFileCacher
+from watchers.services.redis_cache_service import RedisCacheService
 from watchers.api.osep_api import OsepAPI
 from watchers.managers.watcher_manager import OsepWatcherManager
 from settings import WORKDIR
@@ -25,7 +25,7 @@ class OsepWatcher(BaseWatcher):
         self,
         credentials: UserCredentials,
         api: OsepAPI,
-        cache_service: AsyncFileCacher,
+        cache_service: RedisCacheService,
         config: Optional[WatcherConfig] = None,
         config_service=None,
         osep_config: Optional[OsepWatcherConfig] = None,

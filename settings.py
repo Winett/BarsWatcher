@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=False, alias="DEBUG")
     admins: list[int] = Field(alias='ADMINS')
     db_url: str = Field(alias='DB_URL')
+    redis_url: str = Field(default="redis://localhost:6379/0", alias='REDIS_URL')
 
     @field_validator('bot_token')
     def check_bot_token(cls, v):

@@ -9,7 +9,6 @@ from settings import WORKDIR
 
 from watchers.managers.watcher_manager import OsepWatcherManager
 from watchers.models.watcher_models import UserCredentials, WatcherType
-from watchers.services.cache_service import AsyncFileCacher
 from watchers.services.watcher_factory import WatcherFactory
 from watchers.core.exceptions import Auth2FA
 from watchers.connectors.connection_monitor import OsepMonitor
@@ -89,8 +88,7 @@ async def osep_password_command(msg: Message, state: FSMContext, session: sessio
         return
 
     # Создаём watcher через фабрику
-    cache = AsyncFileCacher(filename=WORKDIR / "cache.json")
-    osep_watcher = await WatcherFactory.create_osep_watcher(msg.from_user.id, auth, cache)
+    osep_watcher = await WatcherFactory.create_osep_watcher(msg.from_user.id, auth)
     await osep_watcher.start()
     await user_service.set_osep_status_used(msg.from_user.id, True)
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание ОСЭП!')
@@ -121,8 +119,7 @@ async def watching_osep_command(msg: CallbackQuery, state: FSMContext, session: 
         await msg.answer("Неверный логин или пароль")
         return
 
-    cache = AsyncFileCacher(filename=WORKDIR / "cache.json")
-    osep_watcher = await WatcherFactory.create_osep_watcher(msg.from_user.id, auth, cache)
+    osep_watcher = await WatcherFactory.create_osep_watcher(msg.from_user.id, auth)
     await osep_watcher.start()
     await user_service.set_osep_status_used(msg.from_user.id, True)
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание ОСЭП!')

@@ -11,7 +11,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from watchers.connectors.connection_monitor import BarsMonitor, OsepMonitor
 from watchers.managers.watcher_manager import OsepWatcherManager, BarsWatcherManager
-from watchers.services.cache_service import AsyncFileCacher
+from watchers.services.redis_cache_service import RedisCacheService
 from watchers.services.watcher_factory import WatcherFactory
 from watchers.session.pool_session import PoolSession
 from webhook import create_prepared_webapp, WEBHOOK_HOST, WEBHOOK_PORT
@@ -29,7 +29,6 @@ from middlewares.logging import LoggingMiddleware
 
 from services.notification import NotificationService
 from watchers.services.notification_service import TelegramNotificationService
-from watchers.utils.cache_documents import timer_cleanup_cache_documents
 
 from loader import recover_notifications_over_restarting_bot, recover_notifications_over_restarting_bot_osep
 from webhook import WEBHOOK_BASE_URL, WEBHOOK_PATH
@@ -65,17 +64,16 @@ async def on_bot_startup(bot: Bot):
     OsepWatcherManager.set_config_service(config_service)
     logger.info('ConfigService инициализирован!')
 
+    # Инициализация Redis
+    cache = RedisCacheService(settings.redis_url)
+    await cache.connect()
+    WatcherFactory.set_cache_service(cache)
+    BarsWatcherManager.set_cache_service(cache)
+    OsepWatcherManager.set_cache_service(cache)
+    logger.info('RedisCacheService инициализирован!')
+
     me = await bot.get_me()
     logger.info(f'Бот запущен! bot_id = {me.id} username = {me.username}')
-    #===============
-    Path(WORKDIR / "cashed_files").mkdir(exist_ok=True)
-    cache = AsyncFileCacher(filename=WORKDIR / "cache.json")
-    async def autosave_cache():
-        while True:
-            await asyncio.sleep(300)
-            await cache.asave()
-    asyncio.create_task(autosave_cache())
-    asyncio.create_task(timer_cleanup_cache_documents())
     #===============
 
     await BarsMonitor().start_monitoring()
@@ -95,8 +93,9 @@ async def on_bot_startup(bot: Bot):
     ])
 
 async def on_bot_shutdown(*args, **kwargs):
-    cache = AsyncFileCacher(filename="cache.json")
-    await cache.close()
+    cache = WatcherFactory.get_cache_service()
+    if cache:
+        await cache.close()
 
     BarsMonitor().unsubscribe(BarsWatcherManager.process_connection_event)
     OsepMonitor().unsubscribe(OsepWatcherManager.process_connection_event)
