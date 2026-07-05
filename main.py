@@ -91,6 +91,7 @@ async def on_bot_startup(bot: Bot):
         BotCommand(command='/start', description='Перезапустить бота'),
         BotCommand(command='/suggestion', description='Отправить предложение по улучшению бота'),
         BotCommand(command='/report', description='Отправить админу сообщение о неполадках'),
+        BotCommand(command="/settings", description="Настройки вотчеров")
     ])
 
 async def on_bot_shutdown(*args, **kwargs):
