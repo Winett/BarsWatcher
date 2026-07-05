@@ -1,6 +1,7 @@
 from loguru import logger
 import asyncio
 from aiogram import Bot
+from aiohttp import ClientError
 
 from database.db import async_session
 from services.user import UserService
@@ -9,6 +10,7 @@ from watchers.models.watcher_models import UserCredentials, WatcherType
 from watchers.services.watcher_factory import WatcherFactory
 from watchers.session.pool_session import PoolSession
 from watchers.core.exceptions import Auth2FA
+from watchers.managers.watcher_manager import BarsWatcherManager, OsepWatcherManager
 
 
 async def recover_notifications_over_restarting_bot(bot: Bot):
@@ -36,6 +38,13 @@ async def recover_notifications_over_restarting_bot(bot: Bot):
             async with async_session() as session:
                 user_service = UserService(session)
                 await user_service.set_bars_status_used(user.user_id, False)
+            continue
+        except ClientError as e:
+            logger.warning(f"Сервер БАРС недоступен для {user.user_id}: {e}. Добавляем в очередь.")
+            BarsWatcherManager.add_pending_watcher(user.user_id, {
+                "login": user.bars_login,
+                "password": user.bars_password,
+            })
             continue
 
         if not res:
@@ -72,7 +81,16 @@ async def recover_notifications_over_restarting_bot_osep():
             watcher_type=WatcherType.OSEP
         )
 
-        res = await auth.login()
+        try:
+            res = await auth.login()
+        except ClientError as e:
+            logger.warning(f"Сервер ОСЭП недоступен для {user.user_id}: {e}. Добавляем в очередь.")
+            OsepWatcherManager.add_pending_watcher(user.user_id, {
+                "login": user.osep_login,
+                "password": user.osep_password,
+            })
+            continue
+
         if not res:
             continue
 
