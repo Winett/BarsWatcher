@@ -141,7 +141,6 @@ class MailMessage(BaseModel):
 
     def format_message(self) -> str:
         return (
-                f"Новое письмо!\n\n"
                 f"От: {self.sender_name}\n"
                 f"Тема: {self.subject}\n\n"
                 f"{self.body}"

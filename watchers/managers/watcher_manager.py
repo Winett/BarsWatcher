@@ -200,7 +200,7 @@ class WatcherManager(ABC, Generic[W]):
 
             # === ОСЭП: Почта ===
             case EventType.NEW_MAIL:
-                await cls._send_notification(event, "📧 Новое письмо")
+                await cls._send_notification(event, "Новое письмо!")
 
             # === Системные ===
             case EventType.EXCEPTION:
