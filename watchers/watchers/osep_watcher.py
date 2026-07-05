@@ -147,7 +147,9 @@ class OsepWatcher(BaseWatcher):
             if new_message.has_attachments:
                 logger.debug(f"{self._logger_template} Вложений: {len(new_message.attachments)}")
                 for attachment in new_message.attachments:
-                    attachment_cache_key = f"attachment_osep_{attachment.attachment_id.id}"
+                    # Ключ на основе имени файла и размера — шарится между пользователями
+                    file_hash = md5(f"{attachment.name}{attachment.size}".encode()).hexdigest()
+                    attachment_cache_key = f"attachment_osep_{file_hash}"
                     file = await self.cache_service.get(attachment_cache_key)
 
                     if not file:
@@ -163,7 +165,7 @@ class OsepWatcher(BaseWatcher):
 
                         (WORKDIR / Path("cashed_files/")).mkdir(exist_ok=True)
                         path = WORKDIR / Path(
-                            f"cashed_files/{md5(att_data.id.encode(errors='ignore')).hexdigest()}_{att_data.filename}.bin"
+                            f"cashed_files/{file_hash}_{att_data.filename}.bin"
                         )
                         async with aiofiles.open(path, "wb") as f:
                             await f.write(file_content)
@@ -183,7 +185,7 @@ class OsepWatcher(BaseWatcher):
                         logger.debug(f"{self._logger_template} Вложение {attachment.name} скачано и закэшировано")
                     else:
                         att_data = AttachmentData(**file)
-                        path = WORKDIR / f"cashed_files/{md5(att_data.id.encode(errors='ignore')).hexdigest()}_{att_data.filename}.bin"
+                        path = WORKDIR / f"cashed_files/{file_hash}_{att_data.filename}.bin"
                         async with aiofiles.open(path, "rb") as f:
                             att_data.content = await f.read()
                         load_data.append(att_data)
