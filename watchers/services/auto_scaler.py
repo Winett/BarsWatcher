@@ -9,9 +9,9 @@ class AutoScaler:
     """
 
     SCALE_UP_FACTOR = 1.5
-    SCALE_DOWN_FACTOR = 0.9
+    SCALE_DOWN_FACTOR = 0.7
 
-    def __init__(self, base_interval: int, max_interval: int = 600):
+    def __init__(self, base_interval: int, max_interval: int = 300):
         self.base_interval = base_interval
         self.max_interval = max_interval
         self.current_interval = base_interval

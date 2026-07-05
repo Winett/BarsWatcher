@@ -41,6 +41,7 @@ class BaseWatcher(ABC):
         # AutoScaler — создаётся при старте цикла
         self._auto_scaler: Optional[AutoScaler] = None
         self._auto_scale_enabled = True
+        self._was_waiting = False
 
         self._logger_template = f"{self.__class__.__name__:^10} | {credentials.username:^10} | "
 
@@ -84,6 +85,7 @@ class BaseWatcher(ABC):
                 # Ждём доступности сервера (если недоступен)
                 if not self._server_available.is_set():
                     logger.info(f"{self._logger_template} Сервер недоступен, ожидание...")
+                    self._was_waiting = True
                     await self._server_available.wait()
                     logger.info(f"{self._logger_template} Сервер доступен, возобновление работы")
 
@@ -93,7 +95,14 @@ class BaseWatcher(ABC):
                     await self._iteration()
                     # Успех — уменьшаем интервал если авто-шкалирование включено
                     if self._auto_scaler and self._auto_scale_enabled:
-                        self.config.poll_interval = self._auto_scaler.on_success()
+                        # Сброс AutoScaler после восстановления сервера
+                        if self._was_waiting:
+                            self._auto_scaler.reset()
+                            self._was_waiting = False
+                            self.config.poll_interval = self._auto_scaler.current_interval
+                            logger.info(f"{self._logger_template} AutoScaler сброшен после восстановления сервера")
+                        else:
+                            self.config.poll_interval = self._auto_scaler.on_success()
                 except asyncio.CancelledError:
                     raise
                 except (AuthError, Auth2FA) as e:
