@@ -143,19 +143,24 @@ class WatcherManager(ABC, Generic[W]):
             f"Событие: {event.event_type.value} | {event.watcher_type.value}"
         )
         match event.event_type:
-            case EventType.NEW_CHANGE:
-                files_count = len(event.metadata.get('files', []))
-                logger.info(
-                    f"{cls.__name__} | {event.username} | "
-                    f"Новое изменение | files={files_count} | "
-                    f"{event.message[:100]}..."
-                )
-                await cls.notification_service.send_message_with_documents(
-                    event.user_id,
-                    event.message,
-                    files=event.metadata.get('files', [])
-                )
-                logger.debug(f"{cls.__name__} | {event.username} | Уведомление отправлено")
+            # === БАРС: Оценки ===
+            case EventType.NEW_MARK:
+                await cls._send_notification(event, "📝 Новая оценка")
+
+            case EventType.MARK_CHANGED:
+                await cls._send_notification(event, "🔄 Изменение оценки")
+
+            case EventType.REWRITING:
+                await cls._send_notification(event, "✏️ Переписывание")
+
+            case EventType.FINAL_GRADE_CHANGED:
+                await cls._send_notification(event, "🎓 Итоговая оценка")
+
+            # === ОСЭП: Почта ===
+            case EventType.NEW_MAIL:
+                await cls._send_notification(event, "📧 Новое письмо")
+
+            # === Системные ===
             case EventType.EXCEPTION:
                 logger.error(
                     f"{cls.__name__} | {event.username} | "
@@ -207,6 +212,17 @@ class WatcherManager(ABC, Generic[W]):
                             logger.warning(f"{cls.__name__} | {event.username} | Вотчер не найден для перезапуска")
             case _:
                 logger.warning(f"{cls.__name__} Неизвестное событие: {event.event_type}")
+
+    @classmethod
+    async def _send_notification(cls, event: WatcherEvent, header: str):
+        """Отправить уведомление с заголовком."""
+        files = event.metadata.get('files', [])
+        logger.info(f"{cls.__name__} | {event.username} | {header} | files={len(files)}")
+        await cls.notification_service.send_message_with_documents(
+            event.user_id,
+            f"{header}\n\n{event.message}",
+            files=files
+        )
 
     @classmethod
     def _get_all_not_started_instance(cls) -> list[W]:

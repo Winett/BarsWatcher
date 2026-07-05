@@ -79,7 +79,14 @@ async def test_watcher_runs_until_manual_stop(creds, fast_config, cache):
     watcher = MockWatcher(
         creds, cache, fast_config,
         fetch_return="test_data",
-        detect_return=["change1"]
+        detect_return=[WatcherEvent(
+            event_type=EventType.MARK_CHANGED,
+            user_id=12345,
+            username="test_user",
+            status=WatcherStatus.WORKING,
+            watcher_type=WatcherType.BARS,
+            message="change1"
+        )]
     )
 
     await watcher.start()
@@ -301,14 +308,22 @@ async def test_watcher_detects_changes_and_notifies(creds, fast_config, cache):
     watcher = MockWatcher(
         creds, cache, fast_config,
         fetch_return="data",
-        detect_return=["Изменилась оценка по Математике КМ-1: 4 -> 5"]
+        detect_return=[WatcherEvent(
+            event_type=EventType.MARK_CHANGED,
+            user_id=12345,
+            username="test_user",
+            status=WatcherStatus.WORKING,
+            watcher_type=WatcherType.BARS,
+            message="Изменилась оценка по Математике КМ-1: 4 → 5",
+            subject="Математика"
+        )]
     )
     watcher.subscribe(capture_event)
 
     await watcher.start()
     await asyncio.sleep(0.3)
 
-    change_events = [e for e in events_received if e.event_type == EventType.NEW_CHANGE]
+    change_events = [e for e in events_received if e.event_type == EventType.MARK_CHANGED]
     assert len(change_events) >= 1
     assert "Математике" in change_events[0].message
 

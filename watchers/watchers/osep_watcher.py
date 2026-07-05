@@ -208,8 +208,9 @@ class OsepWatcher(BaseWatcher):
             )
 
             watcher_event = self._generator_events(
-                event_type=EventType.NEW_CHANGE,
+                event_type=EventType.NEW_MAIL,
                 message=mail_message.format_message(),
+                subject=mail_message.subject,
                 files=load_data,
                 mail_message=mail_message,
             )

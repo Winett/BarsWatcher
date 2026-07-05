@@ -66,7 +66,7 @@ class BaseWatcher(ABC):
         pass
 
     @abstractmethod
-    async def detect_changes(self, old_data, new_data):
+    async def detect_changes(self, old_data, new_data) -> list[WatcherEvent]:
         """Обнаружение изменений в данных"""
         pass
 
@@ -147,41 +147,28 @@ class BaseWatcher(ABC):
         old_data = await self.cache_service.get(cache_key)
         logger.debug(f"{self._logger_template} Кэш: {'есть данные' if old_data else 'пусто (первая итерация)'}")
 
-        changes = await self.detect_changes(old_data, new_data)
+        events = await self.detect_changes(old_data, new_data)
 
         await self.cache_service.set(cache_key, new_data, self.config.cache_ttl)
         logger.debug(f"{self._logger_template} Кэш обновлён | ttl={self.config.cache_ttl}s")
 
-        if changes:
-            logger.info(f"{self._logger_template} Обнаружено изменений: {len(changes)}")
-            for i, change in enumerate(changes, 1):
-                logger.info(f"{self._logger_template}   [{i}] {change}")
-            await self._notify_changes(changes)
+        if events:
+            logger.info(f"{self._logger_template} Обнаружено изменений: {len(events)}")
+            for i, event in enumerate(events, 1):
+                logger.info(f"{self._logger_template}   [{i}] {event.event_type.value}: {event.message}")
+            for event in events:
+                await self._notify_subscribers(event)
         else:
             logger.debug(f"{self._logger_template} Изменений нет")
 
-    async def _notify_changes(self, changes: list[str]):
-        """Отправка уведомлений об изменениях"""
-        event = WatcherEvent(
-            event_type=EventType.NEW_CHANGE,
-            user_id=self.credentials.user_id,
-            username=self.credentials.username,
-            status=self._stats.status,
-            watcher_type=self.credentials.watcher_type,
-            message="\n".join(changes)
-        )
-
-        logger.debug(f"{self._logger_template} Отправка уведомления подписчикам...")
-        await self._notify_subscribers(event)
-        logger.debug(f"{self._logger_template} Уведомление отправлено")
-
-    def _generator_events(self, event_type: EventType, message: str, **metadata):
+    def _generator_events(self, event_type: EventType, message: str, subject: str = "", **metadata):
         return WatcherEvent(
             event_type=event_type,
             user_id=self.credentials.user_id,
             username=self.credentials.username,
             status=self._stats.status,
             message=message,
+            subject=subject,
             watcher_type=self.credentials.watcher_type,
             metadata=metadata,
         )

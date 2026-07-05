@@ -19,10 +19,19 @@ class WatcherStatus(Enum):
 
 
 class EventType(Enum):
-    NEW_CHANGE = "NEW_CHANGE"
+    # БАРС — оценки
+    NEW_MARK = "NEW_MARK"
+    MARK_CHANGED = "MARK_CHANGED"
+    REWRITING = "REWRITING"
+    FINAL_GRADE_CHANGED = "FINAL_GRADE_CHANGED"
+
+    # ОСЭП — почта
+    NEW_MAIL = "NEW_MAIL"
+
+    # Системные
+    EXCEPTION = "EXCEPTION"
     PAUSE = "PAUSE"
     RESUME = "RESUME"
-    EXCEPTION = "EXCEPTION"
     UNKNOWN = "UNKNOWN"
 
 
@@ -34,6 +43,7 @@ class WatcherEvent:
     status: WatcherStatus
     watcher_type: WatcherType
     message: str = ""
+    subject: str = ""
     error: Optional[Exception] = None
     timestamp: datetime = field(default_factory=datetime.now)
     metadata: dict = field(default_factory=dict)

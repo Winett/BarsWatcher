@@ -6,7 +6,7 @@ from hashlib import md5
 from loguru import logger
 
 from watchers.core.base_watcher import BaseWatcher
-from watchers.models.watcher_models import UserCredentials, WatcherConfig, BarsWatcherConfig
+from watchers.models.watcher_models import UserCredentials, WatcherConfig, BarsWatcherConfig, EventType, WatcherEvent
 from watchers.models.mark_models import DisciplineMarks
 from watchers.services.redis_cache_service import RedisCacheService
 from watchers.api.bars_api import BarsAPI
@@ -59,7 +59,7 @@ class BarsWatcher(BaseWatcher):
         logger.debug(f"{self._logger_template} Парсинг OK | дисциплин: {disciplines_count}")
         return self._last_process_data
 
-    async def detect_changes(self, old_data: dict, new_data: dict) -> List[str]:
+    async def detect_changes(self, old_data: dict, new_data: dict) -> list[WatcherEvent]:
         """Обнаружение изменений в оценках"""
         if not old_data or not new_data or old_data is new_data:
             logger.debug(f"{self._logger_template} detect_changes: нет данных для сравнения")
@@ -67,20 +67,25 @@ class BarsWatcher(BaseWatcher):
 
         old_data = {k: DisciplineMarks(**v) for k, v in old_data.items()}
 
-        changes = []
+        events = []
         for discipline_name, new_discipline in new_data.items():
             old_discipline = old_data.get(discipline_name)
 
             if not old_discipline:
                 continue
 
-            changes.extend(self._compare_disciplines(old_discipline, new_discipline))
+            for event_type, message, subject in self._compare_disciplines(old_discipline, new_discipline):
+                events.append(self._generator_events(
+                    event_type=event_type,
+                    message=message,
+                    subject=subject,
+                ))
 
-        logger.debug(f"{self._logger_template} detect_changes: {len(changes)} изменений")
-        return changes
+        logger.debug(f"{self._logger_template} detect_changes: {len(events)} изменений")
+        return events
 
-    def _compare_disciplines(self, old: DisciplineMarks, new: DisciplineMarks) -> list[str]:
-        """Сравнение двух дисциплин"""
+    def _compare_disciplines(self, old: DisciplineMarks, new: DisciplineMarks) -> list[tuple[EventType, str, str]]:
+        """Сравнение двух дисциплин. Возвращает список (EventType, message, subject)."""
         hide = not self.bars_config.show_marks
         changes = []
 
@@ -88,27 +93,51 @@ class BarsWatcher(BaseWatcher):
             if old_mark.mark != new_mark.mark or old_mark.date != new_mark.date:
                 new_val = f"<tg-spoiler>{new_mark.mark}</tg-spoiler>" if hide else new_mark.mark
                 if not old_mark.mark:
-                    changes.append(f"Оценка по {old.name} КМ-{i + 1}: {new_val}")
+                    changes.append((
+                        EventType.NEW_MARK,
+                        f"Оценка по {old.name} КМ-{i + 1}: {new_val}",
+                        old.name
+                    ))
                 else:
                     if len(old_mark.rewriting) != len(new_mark.rewriting):
-                        changes.append(f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_val}")
+                        changes.append((
+                            EventType.REWRITING,
+                            f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.mark} → {new_val}",
+                            old.name
+                        ))
                     else:
-                        changes.append(f"Изменилась оценка по {old.name} КМ-{i + 1}: {old_mark.mark} -> {new_val}")
+                        changes.append((
+                            EventType.MARK_CHANGED,
+                            f"Изменилась оценка по {old.name} КМ-{i + 1}: {old_mark.mark} → {new_val}",
+                            old.name
+                        ))
                 continue
 
             if len(old_mark.rewriting) != len(new_mark.rewriting):
                 for rewrite in range(len(new_mark.rewriting) - len(old_mark.rewriting), 0, -1):
                     rw_val = f"<tg-spoiler>{new_mark.rewriting[-rewrite].mark}</tg-spoiler>" if hide else new_mark.rewriting[-rewrite].mark
-                    changes.append(f"Переписывание по {old.name} КМ-{i + 1}: -> {rw_val}")
+                    changes.append((
+                        EventType.REWRITING,
+                        f"Переписывание по {old.name} КМ-{i + 1}: → {rw_val}",
+                        old.name
+                    ))
 
             for j in range(min(len(old_mark.rewriting), len(new_mark.rewriting))):
                 if old_mark.rewriting[j].mark != new_mark.rewriting[j].mark:
                     rw_val = f"<tg-spoiler>{new_mark.rewriting[j].mark}</tg-spoiler>" if hide else new_mark.rewriting[j].mark
-                    changes.append(f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.rewriting[j].mark} -> {rw_val}")
+                    changes.append((
+                        EventType.REWRITING,
+                        f"Переписывание по {old.name} КМ-{i + 1}: {old_mark.rewriting[j].mark} → {rw_val}",
+                        old.name
+                    ))
 
         if old.mark_final != new.mark_final:
             final_val = f"<tg-spoiler>{new.mark_final}</tg-spoiler>" if hide else new.mark_final
-            changes.append(f"Изменилась итоговая оценка по {old.name}: {old.mark_final} -> {final_val}")
+            changes.append((
+                EventType.FINAL_GRADE_CHANGED,
+                f"Итоговая оценка по {old.name}: {old.mark_final} → {final_val}",
+                old.name
+            ))
 
         return changes
 
