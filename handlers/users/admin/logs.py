@@ -29,7 +29,7 @@ async def logs_command(msg: Message, command: CommandObject):
         lines.append(f"  {date_formatted}  ({log['size']})")
     lines.append("\nОтправить: /logs <дата>\nПример: /logs 2026-07-06")
 
-    await msg.answer("\n".join(lines))
+    await msg.answer("\n".join(lines), parse_mode=None)
 
 
 @router.message(AdminFilter(), Command('logs_date'))
@@ -46,7 +46,7 @@ async def logs_date_input(msg: Message, state: FSMContext):
 
     date_str = msg.text.strip() if msg.text else ""
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
-        await msg.answer("Неверный формат. Используйте YYYY-MM-DD (например, 2026-07-06)")
+        await msg.answer("Неверный формат. Используйте YYYY-MM-DD (например, 2026-07-06)", parse_mode=None)
         return
 
     await state.clear()
