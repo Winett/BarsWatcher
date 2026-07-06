@@ -26,6 +26,7 @@ from database.services.config_service import ConfigService
 from middlewares.db import DatabaseMiddleware
 from middlewares.throttling import ThrottlingMiddleware
 from middlewares.logging import LoggingMiddleware
+from middlewares.media_group import MediaGroupMiddleware
 
 from services.notification import NotificationService
 from watchers.services.notification_service import TelegramNotificationService
@@ -39,6 +40,7 @@ from pathlib import Path
 def create_dispatcher() -> Dispatcher:
     dp = Dispatcher(storage=MemoryStorage())
     dp.message.middleware(DatabaseMiddleware())
+    dp.message.middleware(MediaGroupMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
     dp.update.outer_middleware(ThrottlingMiddleware())
     dp.update.outer_middleware(LoggingMiddleware())

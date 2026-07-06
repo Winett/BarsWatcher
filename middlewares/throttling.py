@@ -26,6 +26,10 @@ class ThrottlingMiddleware(BaseMiddleware):
         user_id = user.id
         current_time = time.time()
 
+        msg = getattr(event, "message", None)
+        if msg and getattr(msg, "media_group_id", None):
+            return await handler(event, data)
+
         if current_time - self.user_last_request[user_id] < self.rate_limit:
             return
 
