@@ -89,6 +89,11 @@ class BarsWatcher(BaseWatcher):
         hide = not self.bars_config.show_marks
         changes = []
 
+        old_has_marks = any(m.mark for m in old.marks)
+        new_has_marks = any(m.mark for m in new.marks)
+        if old_has_marks and not new_has_marks:
+            return []
+
         for i, (old_mark, new_mark) in enumerate(zip(old.marks, new.marks)):
             if old_mark.mark != new_mark.mark or old_mark.date != new_mark.date:
                 new_val = f"<tg-spoiler>{new_mark.mark}</tg-spoiler>" if hide else new_mark.mark
