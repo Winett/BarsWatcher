@@ -140,9 +140,11 @@ class MailMessage(BaseModel):
     received_at: datetime = Field(default_factory=datetime.now)
 
     def format_message(self) -> str:
+        # Заменяем < и > на пробелы, чтобы Telegram не пытался парсить как теги
+        safe_body = self.body.replace('<', ' ').replace('>', ' ')
         return (
                 f"От: {self.sender_name}\n"
                 f"Тема: {self.subject}\n\n"
-                f"{self.body}"
+                f"{safe_body}"
                 + ("\n\nЕсть вложения!" if self.has_attachments else "")
         )

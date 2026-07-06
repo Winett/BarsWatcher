@@ -20,6 +20,7 @@ from services.user import UserService
 from database.db import async_session
 from settings import settings
 from uuid import uuid4
+from html import escape as html_escape
 
 W = TypeVar('W', bound=BaseWatcher)
 
@@ -40,6 +41,11 @@ class WatcherManager(ABC, Generic[W]):
     def set_config_service(cls, config_service):
         """Установить ConfigService для менеджера."""
         cls._config_service = config_service
+
+    @classmethod
+    def _get_watcher_type(cls) -> Optional[WatcherType]:
+        """Тип вотчеров, которые обрабатывает этот менеджер. None = все типы."""
+        return None
 
     @classmethod
     def _get_watchers(cls) -> dict[int, W]:
@@ -180,6 +186,11 @@ class WatcherManager(ABC, Generic[W]):
     @classmethod
     async def _handle_watcher_event(cls, event: WatcherEvent):
         """Обработка событий от вотчеров"""
+        # Пропуск событий от другого типа вотчеров (BarsManager обрабатывает только BARS, OsepManager — только OSEP)
+        expected_type = cls._get_watcher_type()
+        if expected_type and event.watcher_type != expected_type:
+            return
+
         logger.info(
             f"{cls.__name__} | {event.username} ({event.user_id}) | "
             f"Событие: {event.event_type.value} | {event.watcher_type.value}"
@@ -260,11 +271,18 @@ class WatcherManager(ABC, Generic[W]):
         """Отправить уведомление с заголовком."""
         files = event.metadata.get('files', [])
         logger.info(f"{cls.__name__} | {event.username} | {header} | files={len(files)}")
+        # Экранируем сообщение от вредоносного HTML (ссылки вида <https://...>)
+        safe_message = html_escape(event.message)
         await cls.notification_service.send_message_with_documents(
             event.user_id,
-            f"{header}\n\n{event.message}",
+            f"{header}\n\n{safe_message}",
             files=files
         )
+
+    @classmethod
+    def _escape_for_telegram(cls, text: str) -> str:
+        """Экранировать HTML-сущности в тексте для безопасной отправки."""
+        return html_escape(text)
 
     @classmethod
     def _get_all_not_started_instance(cls) -> list[W]:
@@ -339,6 +357,10 @@ class WatcherManager(ABC, Generic[W]):
 
 class BarsWatcherManager(WatcherManager):
     @classmethod
+    def _get_watcher_type(cls) -> Optional[WatcherType]:
+        return WatcherType.BARS
+
+    @classmethod
     async def _create_and_start_from_pending(cls, user_id: int, creds_data: dict):
         """Создать и запустить BarsWatcher из очереди ожидания."""
         from watchers.services.watcher_factory import WatcherFactory
@@ -391,6 +413,10 @@ class BarsWatcherManager(WatcherManager):
 
 
 class OsepWatcherManager(WatcherManager):
+    @classmethod
+    def _get_watcher_type(cls) -> Optional[WatcherType]:
+        return WatcherType.OSEP
+
     @classmethod
     async def _create_and_start_from_pending(cls, user_id: int, creds_data: dict):
         """Создать и запустить OsepWatcher из очереди ожидания."""

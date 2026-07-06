@@ -1,8 +1,10 @@
 from abc import ABC
+from html import escape as html_escape
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramRetryAfter
 from aiogram.types import BufferedInputFile, InputMediaDocument
+from loguru import logger
 
 from watchers.utils.rate_limiter import RateLimiter
 
@@ -45,12 +47,18 @@ class TelegramNotificationService(BaseNotificationService):
 
     @staticmethod
     def prepare_message(message: str) -> list[str]:
+        """Разбить сообщение на части по 4096 символов (лимит Telegram)."""
         messages = []
 
         for i in range(0, len(message), 4096):
             messages.append(message[i:i+4096])
 
         return messages
+
+    @staticmethod
+    def escape_html(text: str) -> str:
+        """Экранировать HTML-сущности для безопасной отправки в Telegram (parse_mode=HTML)."""
+        return html_escape(text)
 
     @staticmethod
     def prepare_documents(files: list[AttachmentData]):
@@ -79,20 +87,21 @@ class TelegramNotificationService(BaseNotificationService):
                         text=part,
                         reply_to_message_id=last_message.message_id if last_message else None
                     )
+            logger.info(f"Сообщение отправлено пользователю {user_id}")
             return True
 
         except TelegramRetryAfter as e:
             await asyncio.sleep(e.retry_after)
             return await self.send_message(user_id, message)
 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Ошибка отправки сообщения пользователю {user_id}: {e}")
             return False
 
     async def send_message_with_documents(self, user_id: int, message: str, files: list[AttachmentData]) -> bool:
         try:
             if message:
                 await self.send_message(user_id, message)
-
 
             documents_groups = list(self.prepare_documents(files))
 
@@ -102,14 +111,13 @@ class TelegramNotificationService(BaseNotificationService):
                         chat_id=user_id,
                         media=docs_group
                     )
+            logger.info(f"Документы отправлены пользователю {user_id} ({len(files)} файлов)")
             return True
 
         except TelegramRetryAfter as e:
             await asyncio.sleep(e.retry_after)
             return await self.send_message_with_documents(user_id, message, files)
 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Ошибка отправки документов пользователю {user_id}: {e}")
             return False
-
-
-
