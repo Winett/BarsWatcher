@@ -13,6 +13,7 @@ import threading
 
 from settings import settings
 from functools import wraps
+from services.log_service import LogService
 
 executor = ThreadPoolExecutor(max_workers=2)
 send_lock = threading.Lock()
@@ -47,44 +48,21 @@ def setup_logger(bot: Bot, admins: list[int]):
             executor.submit(send_log_sync, file_name)
 
     def send_log_sync(file_name: str):
-
-
         try:
             loop = asyncio.get_running_loop()
             loop.run_until_complete(
-                send_log_async(file_name)
+                LogService.archive_and_send(file_name, bot, admins)
             )
         except RuntimeError:
             loop = asyncio.new_event_loop()
             try:
                 loop.run_until_complete(
-                    send_log_async(file_name)
+                    LogService.archive_and_send(file_name, bot, admins)
                 )
             finally:
                 loop.close()
         except Exception as e:
             print(f"✗ Ошибка отправки sync: {e}")
-
-        os.remove(file_name)
-
-    async def send_log_async(file_name: str):
-
-        bot = Bot(token=settings.bot_token)
-        try:
-            for admin in admins:
-                await bot.send_document(
-                    chat_id=admin,
-                    document=FSInputFile(path=file_name),
-                    caption="Лог бота\n\n"
-                            "Размер: " + str(Path(file_name).stat().st_size) + " байт",
-                    protect_content=True,
-                    # allow_sending_without_reply=True,
-                )
-            print(f"✓ Лог отправлен: {file_name}")
-        except Exception as e:
-            print(f"✗ Ошибка отправки async: {e}")
-        finally:
-            await bot.session.close()
 
 
     logger_config = {
@@ -95,7 +73,6 @@ def setup_logger(bot: Bot, admins: list[int]):
                           " | <level>{level: <8}</level>"
                           " | {name}:{function}:{module}:{file}:{line}"
                           " - <magenta>{message}</magenta>",
-                # "filter": lambda record: record['level'].no == logging.INFO,
                 "level": "DEBUG",
                 "backtrace": True,
                 "diagnose": True,
@@ -108,7 +85,6 @@ def setup_logger(bot: Bot, admins: list[int]):
                           " | {name}:{function}:{module}:{file}:{line}"
                           " - <magenta>{message}</magenta>",
                 "level": "DEBUG",
-                # "rotation": "1 MB",
                 "rotation": "00:00",
                 "backtrace": True,
                 "diagnose": True,

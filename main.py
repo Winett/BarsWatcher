@@ -31,6 +31,7 @@ from middlewares.media_group import MediaGroupMiddleware
 from services.notification import NotificationService
 from watchers.services.notification_service import TelegramNotificationService
 from watchers.utils.file_cache_manager import FileCacheManager
+from services.log_service import LogService
 
 from loader import recover_notifications_over_restarting_bot, recover_notifications_over_restarting_bot_osep
 from webhook import WEBHOOK_BASE_URL, WEBHOOK_PATH
@@ -76,6 +77,9 @@ async def on_bot_startup(bot: Bot):
     me = await bot.get_me()
     logger.info(f'Бот запущен! bot_id = {me.id} username = {me.username}')
     #===============
+
+    LogService.cleanup_old_logs()
+    logger.info("Старые логи очищены")
 
     await BarsMonitor().start_monitoring()
     await OsepMonitor().start_monitoring()

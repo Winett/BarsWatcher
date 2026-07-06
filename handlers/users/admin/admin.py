@@ -26,5 +26,8 @@ async def admin_command(msg: Message, state: FSMContext, session: sessionmaker):
                "/config_show - показать текущие глобальные настройки\n"
                "/config_global - изменить глобальный параметр\n"
                "/config_user - задать персональный параметр пользователю\n"
-               "/config_bars - настройки БАРС (глобальные или для пользователя)")
+               "/config_bars - настройки БАРС (глобальные или для пользователя)\n\n"
+               "Логи:\n"
+               "/logs - список доступных логов\n"
+               "/logs_date - запросить лог за дату")
     await msg.answer(message)
