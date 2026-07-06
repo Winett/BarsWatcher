@@ -8,12 +8,14 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN useradd --create-home appuser
+COPY . .
+RUN mkdir -p logs && touch log.log && \
+    sed -i 's/\r$//' prestart.sh && chmod +x prestart.sh
+
+RUN useradd --create-home appuser && \
+    chown -R appuser:appuser /app
+
 USER appuser
-
-COPY --chown=appuser:appuser . .
-
-RUN chmod +x prestart.sh
 
 ENTRYPOINT ["/app/prestart.sh"]
 CMD ["python", "main.py"]

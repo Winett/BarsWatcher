@@ -16,7 +16,6 @@ test_notifications.py
 .dockerignore
 Dockerfile
 docker-compose.yml
-alembic/
 tests/
 docs/
 *.md
