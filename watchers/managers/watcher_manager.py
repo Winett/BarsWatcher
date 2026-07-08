@@ -271,13 +271,20 @@ class WatcherManager(ABC, Generic[W]):
         """Отправить уведомление с заголовком."""
         files = event.metadata.get('files', [])
         logger.info(f"{cls.__name__} | {event.username} | {header} | files={len(files)}")
-        # Экранируем сообщение от вредоносного HTML (ссылки вида <https://...>)
         safe_message = html_escape(event.message)
-        await cls.notification_service.send_message_with_documents(
-            event.user_id,
-            f"{header}\n\n{safe_message}",
-            files=files
-        )
+        full_text = f"{header}\n\n{safe_message}"
+
+        if files:
+            success = await cls.notification_service.send_message_with_documents(
+                event.user_id, full_text, files=files
+            )
+            if not success:
+                await cls.notification_service.send_message(
+                    event.user_id,
+                    f"{full_text}\n\n⚠️ Не удалось отправить вложения"
+                )
+        else:
+            await cls.notification_service.send_message(event.user_id, full_text)
 
     @classmethod
     def _escape_for_telegram(cls, text: str) -> str:
@@ -292,7 +299,7 @@ class WatcherManager(ABC, Generic[W]):
     async def pause_all(cls):
         logger.info(f"{cls.__name__} | Пауза всех вотчеров")
         cnt = 0
-        for w in cls._get_watchers().values():
+        for w in list(cls._get_watchers().values()):
             await w.pause()
             cnt += 1
         logger.info(f"{cls.__name__} | Пауза {cnt} вотчеров")
@@ -301,7 +308,7 @@ class WatcherManager(ABC, Generic[W]):
     async def resume_all(cls):
         logger.info(f"{cls.__name__} | Возобновление всех вотчеров")
         cnt = 0
-        for w in cls._get_watchers().values():
+        for w in list(cls._get_watchers().values()):
             await w.resume()
             cnt += 1
         logger.info(f"{cls.__name__} | Возобновление {cnt} вотчеров")
@@ -322,16 +329,19 @@ class WatcherManager(ABC, Generic[W]):
 
     @classmethod
     async def stop_all(cls):
-        for w in cls._get_watchers().values():
+        for w in list(cls._get_watchers().values()):
             await w.stop()
 
     @classmethod
     async def stop_and_delete(cls, user_id: int):
-        watcher = cls.get_watcher_instance(user_id)
-        if watcher:
-            await watcher.stop()
-            await watcher.close()
-            cls.unregister_watcher(user_id)
+        watchers = cls._get_watchers()
+        watcher = watchers.get(user_id)
+        if not watcher:
+            return
+        await watcher.stop()
+        if watchers.get(user_id) is watcher:
+            watchers.pop(user_id, None)
+            watcher.unsubscribe(cls._handle_watcher_event)
 
     @classmethod
     def watcher_stats(cls):
