@@ -1,213 +1,255 @@
 import asyncio
 from datetime import datetime
 from typing import Dict, List, Optional
-from loguru import logger
-
-from watchers.managers.watcher_manager import OsepWatcherManager
-from watchers.core.base_watcher import BaseWatcher
-from watchers.fetchers.osep_fetcher import OsepFetcher
-from watchers.models.watcher_models import WatcherType, WatcherEvent, EventType
-from watchers.models.mail_models import MailMessage, AttachmentData, NewMailEvent, Folders, Folder
-
 from hashlib import md5
+from pathlib import Path
+import fnmatch
 
 import aiofiles
-from pathlib import Path
+from loguru import logger
 
+from watchers.core.base_watcher import BaseWatcher
+from watchers.core.event_service import EventService
+from watchers.models.watcher_models import UserCredentials, WatcherConfig, WatcherType, EventType, OsepWatcherConfig
+from watchers.models.mail_models import (
+    MailMessage, AttachmentData, Folder, Folders, NewMailEvent
+)
+from watchers.services.redis_cache_service import RedisCacheService
+from watchers.api.osep_api import OsepAPI
+from watchers.managers.watcher_manager import OsepWatcherManager
+from watchers.utils.file_cache_manager import FileCacheManager
+from watchers.services.notification_service import DiskFile
 from settings import WORKDIR
 
 
-
 class OsepWatcher(BaseWatcher):
-    def __init__(self, credentials, *args, **kwargs):
-        super().__init__(credentials, *args, **kwargs)
-
-        self.fetcher_service = OsepFetcher(credentials)
-        original_login = self.fetcher_service.login
-
-        async def wrapped_login(*args, **kwargs):
-            self._stats.last_auth_time = datetime.now()
-            return await original_login(*args, **kwargs)
-
-        self.fetcher_service.login = wrapped_login
-
-        origin__request_with_authorization = self.fetcher_service._request_with_authorization
-        async def wrapped_request(*args, **kwargs):
-            self._stats.last_fetch_time = datetime.now()
-            return await origin__request_with_authorization(*args, **kwargs)
-
-        self.fetcher_service._request_with_authorization = wrapped_request
-
-        self.config.poll_interval = 60  # 5 минут для почты
-        self._last_sync_token: Optional[str] = None
+    def __init__(
+        self,
+        credentials: UserCredentials,
+        api: OsepAPI,
+        cache_service: RedisCacheService,
+        config: Optional[WatcherConfig] = None,
+        config_service=None,
+        osep_config: Optional[OsepWatcherConfig] = None,
+    ):
+        super().__init__(credentials, cache_service, config, config_service)
+        self.api = api
+        self.osep_config = osep_config or OsepWatcherConfig()
         self._folders_cache_key = f"osep_folders_{self.credentials.username}"
+        self._mail_tasks: set[asyncio.Task] = set()
+
+    def _is_blacklisted(self, email: str) -> bool:
+        """Проверить, есть ли email в blacklist (с поддержкой wildcard *)."""
+        email_lower = email.lower()
+        for pattern in self.osep_config.blacklist:
+            if fnmatch.fnmatch(email_lower, pattern.lower()):
+                return True
+        return False
 
     def _register_instance(self):
         OsepWatcherManager.register_watcher(self.credentials.user_id, self)
+        logger.debug(f"{self._logger_template} Зарегистрирован в OsepWatcherManager")
 
     async def fetch_data(self) -> Dict:
-        """Получение данных о папках и письмах"""
+        """Один снимок: получить текущее состояние папок и вернуть их."""
+        logger.debug(f"{self._logger_template} osep_api.get_folders()...")
+        folders = await self.api.get_folders()
+        self._stats.last_fetch_time = datetime.now()
+        result = {folder.display_name: folder for folder in folders.folders}
+        logger.debug(f"{self._logger_template} osep_api.get_folders() OK | папок: {len(result)}")
+        return result
 
-        async def _process_new_mail(conversation_id: str):
-        # async def _process_new_mail(event: NewMailEvent):
-            items = await self.fetcher_service.get_conversation_items(conversation_id)
-            new_massage = items.conversation_nodes[0].items[0]
+    async def process_data(self, data: Dict) -> Dict:
+        """Обработка: вернуть данные как есть (словарь папок)"""
+        logger.debug(f"{self._logger_template} process_data: папок={len(data)}")
+        return data
+
+    async def detect_changes(self, old_data: Dict, new_data: Dict) -> List[str]:
+        """Обнаружение новых писем через сравнение count'ов папок"""
+        if not old_data or not new_data:
+            logger.debug(f"{self._logger_template} detect_changes: нет данных для сравнения")
+            return []
+
+        ignore_folders = {
+            "Журнал", "Задачи", "Заметки", "Исходящие", "Нежелательная почта",
+            "Отправленные", "Удаленные", "Черновики",
+            "Conversation Action Settings", "Working Set",
+            "{06967759-274D-40B2-A3EB-D7F9E73727D7}",
+            "{A9E2BC46-B3A0-4243-B315-60D991004455}",
+            "GAL Contacts", "Recipient Cache"
+        }
+
+        changes = []
+        new_folders = {name: Folder(**data) if isinstance(data, dict) else data
+                       for name, data in new_data.items()}
+
+        for folder_name, old_folder in old_data.items():
+            if folder_name in ignore_folders:
+                continue
+
+            new_folder = new_folders.get(folder_name)
+            if not new_folder:
+                continue
+
+            old_count = old_folder.get('total_count', 0) if isinstance(old_folder, dict) else old_folder.total_count
+            new_count = new_folder.total_count
+
+            if old_count < new_count:
+                diff = new_count - old_count
+                logger.info(f"{self._logger_template} Новых писем в '{folder_name}': +{diff} (было {old_count}, стало {new_count})")
+                await self._process_new_folder_mail(
+                    folder_id=new_folder.folder_id.id,
+                    new_count=diff
+                )
+
+        logger.debug(f"{self._logger_template} detect_changes: {len(changes)} изменений")
+        return changes
+
+    async def _process_new_folder_mail(self, folder_id: str, new_count: int):
+        """Обработка новых писем в папке"""
+        logger.debug(f"{self._logger_template} Поиск conversations в папке {folder_id}...")
+        try:
+            conversations = await self.api.find_conversations_from_folder(
+                folder_id=folder_id,
+                type_folder_id="FolderId",
+                max_entries_returned=new_count
+            )
+            conversations = conversations.get("Body", {}).get("Conversations", [])
+            logger.debug(f"{self._logger_template} Найдено conversations: {len(conversations)}")
+
+            for conversation in conversations:
+                conv_id = conversation.get("ConversationId", {}).get("Id")
+                if conv_id:
+                    logger.debug(f"{self._logger_template} Запуск обработки conversation {conv_id}")
+                    task = asyncio.create_task(self._process_new_mail(conv_id))
+                    self._mail_tasks.add(task)
+                    task.add_done_callback(self._mail_tasks.discard)
+        except Exception as e:
+            logger.error(f"{self._logger_template} Ошибка обработки папки {folder_id}: {e}")
+
+    async def _process_new_mail(self, conversation_id: str):
+        """Обработка одного нового письма"""
+        logger.debug(f"{self._logger_template} Обработка conversation {conversation_id}...")
+        try:
+            items = await self.api.get_conversation_items(conversation_id)
+            new_message = items.conversation_nodes[0].items[0]
+
+            sender_email = new_message.from_.mail_box.email_address
+
+            # Проверка blacklist
+            if self._is_blacklisted(sender_email):
+                logger.info(
+                    f"{self._logger_template} Письмо от {sender_email} пропущено (blacklist)"
+                )
+                return
+
+            logger.debug(
+                f"{self._logger_template} Письмо: от={new_message.from_.mail_box.name} "
+                f"тема={new_message.subject[:50]}..."
+            )
 
             load_data = []
-            if new_massage.has_attachments:
-                attachments = new_massage.attachments
-                for attachment in attachments:
-                    attachment_cache_key = f"attachment_osep_{attachment.attachment_id.id}"
-                    # file = {
-                    #         "content_type": "text/plain",
-                    #         "filename": "27.txt",
-                    #         "size": 170,
-                    #         "id": "AAMkADBiMDM2ZmI3LTI0Y2ItNDMzMy05OWQ1LTRhY2Y0ZDFmYmNhNABGAAAAAAAXF5gPgvkQRbR8chVGnnQxBwBf9fplkHqsS5Ua52t4fVokAAAAAAEMAABf9fplkHqsS5Ua52t4fVokAAIbn3tDAAABEgAQABVQ1swmUVlKg0dswdVL/os=",
-                    #         "content": None
-                    #     }
-                    file = await self.cache_service.get(attachment_cache_key)
-                    if not file:
-                        file_content = await self.fetcher_service.load_attachment(attachment)
+            if new_message.has_attachments:
+                logger.debug(f"{self._logger_template} Вложений: {len(new_message.attachments)}")
+                for attachment in new_message.attachments:
+                    file_hash = md5(f"{attachment.name}{attachment.size}".encode()).hexdigest()
+                    attachment_cache_key = f"attachment_osep_{file_hash}"
+                    cached_meta = await self.cache_service.get(attachment_cache_key)
+
+                    (WORKDIR / Path("cashed_files/")).mkdir(exist_ok=True)
+                    filename = f"{file_hash}_{attachment.name}.bin"
+                    path = WORKDIR / Path(f"cashed_files/{filename}")
+
+                    if not cached_meta:
+                        logger.debug(f"{self._logger_template} Скачивание вложения {attachment.name} ({attachment.size} bytes)...")
+                        saved_path = await self.api.load_attachment_to_file(attachment, path)
+                        if saved_path is None:
+                            logger.warning(f"{self._logger_template} Вложение {attachment.name} пропущено (слишком большое)")
+                            continue
+
                         att_data = AttachmentData(
                             id=attachment.attachment_id.id,
                             content_type=attachment.content_type,
                             filename=attachment.name,
                             size=attachment.size,
-                            content=file_content
+                            content=None
                         )
 
-                        (WORKDIR / Path("cashed_files/")).mkdir(exist_ok=True)
+                        FileCacheManager.schedule_removal(
+                            filename,
+                            ttl=int(self.config.cache_file_ttl)
+                        )
 
-                        path = WORKDIR / Path(f"cashed_files/{md5(att_data.id.encode(errors="ignore")).hexdigest()}_{att_data.filename}.bin")
-
-
-                        async with aiofiles.open(path, "wb") as f:
-                            await f.write(file_content)
                         await self.cache_service.set(
                             attachment_cache_key,
-                        {
-                            "content_type": attachment.content_type,
-                            "filename": attachment.name,
-                            "size": attachment.size,
-                            "id": attachment.attachment_id.id,
-                            "content": None
-                        },
+                            {
+                                "content_type": attachment.content_type,
+                                "filename": attachment.name,
+                                "size": attachment.size,
+                                "id": attachment.attachment_id.id,
+                                "content": None
+                            },
                             self.config.cache_file_ttl
                         )
-                        load_data.append(att_data)
+                        load_data.append(DiskFile(path=path, original_name=attachment.name))
+                        logger.debug(f"{self._logger_template} Вложение {attachment.name} скачано на диск")
                     else:
-                        att_data = AttachmentData(**file)
-                        async with aiofiles.open(WORKDIR / f"cashed_files/{md5(att_data.id.encode(errors="ignore")).hexdigest()}_{att_data.filename}.bin", "rb") as f:
-                            att_data.content = await f.read()
-                        load_data.append(att_data)
+                        att_data = AttachmentData(**cached_meta)
+                        path = WORKDIR / f"cashed_files/{file_hash}_{att_data.filename}.bin"
+                        if path.exists():
+                            load_data.append(DiskFile(path=path, original_name=att_data.filename))
+                            logger.debug(f"{self._logger_template} Вложение {attachment.name} из кэша на диске")
+                        else:
+                            logger.warning(f"{self._logger_template} Файл {filename} не найден на диске, пропуск")
 
             mail_message = MailMessage(
-                conversation_id=new_massage.conversation_id.id,
-                subject=new_massage.subject,
-                sender_email=new_massage.from_.mail_box.email_address,
-                sender_name=new_massage.from_.mail_box.name,
-                body=new_massage.unique_body.value,
-                has_attachments=new_massage.has_attachments,
-                attachments=load_data
+                conversation_id=new_message.conversation_id.id,
+                subject=new_message.subject,
+                sender_email=new_message.from_.mail_box.email_address,
+                sender_name=new_message.from_.mail_box.name,
+                body=new_message.unique_body.value,
+                has_attachments=new_message.has_attachments,
+                attachments=[
+                    AttachmentData(
+                        id=a.attachment_id.id,
+                        content_type=a.content_type,
+                        filename=a.name,
+                        size=a.size,
+                        content=None
+                    ) for a in new_message.attachments
+                ] if new_message.has_attachments else []
             )
 
             watcher_event = self._generator_events(
-                event_type=EventType.NEW_CHANGE,
+                event_type=EventType.NEW_MAIL,
                 message=mail_message.format_message(),
-
+                subject=mail_message.subject,
                 files=load_data,
                 mail_message=mail_message,
             )
+            logger.info(f"{self._logger_template} Отправка уведомления о письме от {mail_message.sender_name}")
+            EventService().notify_subscribers(watcher_event)
 
-            self.event_service.notify_subscribers(watcher_event)
+        except Exception as e:
+            logger.error(f"{self._logger_template} Ошибка обработки conversation {conversation_id}: {e}")
 
-        async def _update_folders_cache():
-            folders = await self.fetcher_service.get_folders()
-            self._stats.last_fetch_time = datetime.now()
-            # logger.debug(self._logger_template + f"Обновляю Кэш папок")
-            await self.cache_service.set(self._folders_cache_key, {folder.display_name: folder for folder in folders.folders}, ttl=self.config.cache_ttl)
-            # logger.debug(self._logger_template + f'Сохранил кэш')
-
-        def _process_new_mail_event(event: NewMailEvent):
-
-            if event.id == "NewMailNotification":
-                asyncio.create_task(_process_new_mail(event.conversation_id))
-                asyncio.create_task(_update_folders_cache())
-            else:
-                logger.warning(f"Необычное событие при лонг поллинг: {event = }")
-
-        while True:
-
-            folders = await self.fetcher_service.get_folders()
-            self._stats.last_fetch_time = datetime.now()
-
-            old_folders = await self.cache_service.get(self._folders_cache_key)
-
-            if old_folders:
-                old_folders = {folder_name: Folder(**old_folders[folder_name]) for folder_name in old_folders.keys()}
-                folders = {folder.display_name: folder for folder in folders.folders}
-                ignore_folders = {"Журнал", "Задачи", "Заметки", "Исходящие", "Нежелательная почта", "Отправленные",
-                                  "Удаленные", "Черновики",
-                                  "Conversation Action Settings", "Working Set", "{06967759-274D-40B2-A3EB-D7F9E73727D7}",
-                                  "{A9E2BC46-B3A0-4243-B315-60D991004455}",
-                                  "GAL Contacts", "Recipient Cache"}
-                for folder_name, old_folder in old_folders.items():
-
-                    new_folder: Folder = folders.get(folder_name)
-                    if not old_folder or not new_folder or folder_name in ignore_folders:
-                        continue
-
-                    if old_folder.total_count < new_folder.total_count:
-                        conversations = await self.fetcher_service.find_conversations_from_folder(
-                            folder_id=new_folder.folder_id.id,
-                            type_folder_id="FolderId",
-                            max_entries_returned=new_folder.total_count - old_folder.total_count
-                        )
-                        conversations = conversations.get("Body", {}).get("Conversations", [])
-
-                        for conversation in conversations:
-                            conv_id = conversation.get("ConversationId", {}).get("Id")
-                            if not conv_id:
-                                logger.warning(f"Не удалось обработать новое письмо во время пропуска")
-                            asyncio.create_task(_process_new_mail(conv_id))
-
-            await _update_folders_cache()
-            await asyncio.sleep(self.config.poll_interval)
-
-
-        # await self.fetcher_service.await_new_messages(_process_new_mail_event)
-        # self._stats.last_fetch_time = datetime.now()
-        #
-        # await _update_folders_cache()
-
-
-    async def process_data(self, data: Dict) -> List[MailMessage]:
-        """Обработка почтовых данных"""
-        pass
-
-
-    async def detect_changes(self, old_data: List[MailMessage],
-                             new_data: List[MailMessage]) -> List[str]:
-        """Обнаружение новых писем"""
-        pass
-
-
-
-    async def _notify_changes(self, changes: List[str], **metadata):
-        """Переопределение для отправки уведомлений с вложениями"""
-        for change in changes:
-            event = WatcherEvent(
-                event_type=EventType.NEW_CHANGE,
-                user_id=self.credentials.user_id,
-                username=self.credentials.username,
-                status=self._stats.status,
-                watcher_type=WatcherType.OSEP,
-                message=change,
-                metadata=metadata
-            )
-
-            await self._notify_subscribers(event)
+    async def stop(self):
+        async with self._lifecycle_lock:
+            logger.info(f"{self._logger_template} Остановка")
+            self._is_running = False
+            for task in self._mail_tasks:
+                task.cancel()
+            self._mail_tasks.clear()
+            if self._task and not self._task.done():
+                self._task.cancel()
+                try:
+                    await self._task
+                except asyncio.CancelledError:
+                    pass
+            self._task = None
 
     async def close(self):
-        await self.fetcher_service.close()
-
+        from watchers.session.pool_session import PoolSession
+        logger.debug(f"{self._logger_template} Закрытие сессии...")
+        await PoolSession.release(self.credentials.user_id, "osep")
+        logger.debug(f"{self._logger_template} Сессия закрыта")

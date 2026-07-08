@@ -17,6 +17,6 @@ class LoggingMiddleware(BaseMiddleware):
         async with async_session() as session:
             try:
                 await UserService(session).update_username(data['event_from_user'].id, data['event_from_user'].username)
-            except AttributeError:
-                pass
+            except AttributeError as e:
+                logger.debug(f"Не удалось обновить username для {data['event_from_user'].id}: {e}")
         return await handler(event, data)

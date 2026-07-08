@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import  AsyncSession
 
 from sqlalchemy import select, delete
 
-from database.models import User
+from database.models import User, UserConfig
 
 __all__ = ['UserService']
 
@@ -22,6 +22,15 @@ class UserService:
         async with self.session_maker as session:
             user = User(user_id=user_id, username=username)
             session.add(user)
+
+            # Автосоздание UserConfig с дефолтами
+            existing_cfg = await session.execute(
+                select(UserConfig).where(UserConfig.user_id == user_id)
+            )
+            if not existing_cfg.scalar_one_or_none():
+                config = UserConfig(user_id=user_id)
+                session.add(config)
+
             await session.commit()
 
     async def delete(self, user_id: int) -> None:

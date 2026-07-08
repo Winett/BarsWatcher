@@ -8,10 +8,13 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types.bot_command import BotCommand
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import ErrorEvent
 
 from watchers.connectors.connection_monitor import BarsMonitor, OsepMonitor
 from watchers.managers.watcher_manager import OsepWatcherManager, BarsWatcherManager
-from watchers.services.cache_service import AsyncFileCacher
+from watchers.services.redis_cache_service import RedisCacheService
+from watchers.services.watcher_factory import WatcherFactory
+from watchers.session.pool_session import PoolSession
 from webhook import create_prepared_webapp, WEBHOOK_HOST, WEBHOOK_PORT
 
 from settings import settings, WORKDIR
@@ -19,14 +22,17 @@ from loguru import logger
 
 from handlers import router as handlers_router
 
-from database.db import init_db
+from database.db import init_db, async_session
+from database.services.config_service import ConfigService
 from middlewares.db import DatabaseMiddleware
 from middlewares.throttling import ThrottlingMiddleware
 from middlewares.logging import LoggingMiddleware
+from middlewares.media_group import MediaGroupMiddleware
 
 from services.notification import NotificationService
 from watchers.services.notification_service import TelegramNotificationService
-from watchers.utils.cache_documents import timer_cleanup_cache_documents
+from watchers.utils.file_cache_manager import FileCacheManager
+from services.log_service import LogService
 
 from loader import recover_notifications_over_restarting_bot, recover_notifications_over_restarting_bot_osep
 from webhook import WEBHOOK_BASE_URL, WEBHOOK_PATH
@@ -36,9 +42,44 @@ from pathlib import Path
 def create_dispatcher() -> Dispatcher:
     dp = Dispatcher(storage=MemoryStorage())
     dp.message.middleware(DatabaseMiddleware())
+    dp.message.middleware(MediaGroupMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
     dp.update.outer_middleware(ThrottlingMiddleware())
     dp.update.outer_middleware(LoggingMiddleware())
+
+    @dp.errors()
+    async def global_error_handler(event: ErrorEvent):
+        update = event.update
+        exception = event.exception
+        user_id = None
+
+        if update.message:
+            user_id = update.message.from_user.id
+        elif update.callback_query:
+            user_id = update.callback_query.from_user.id
+
+        logger.error(f"Unhandled exception в хендлере: {exception}", exc_info=exception)
+
+        if user_id:
+            try:
+                await event.bot.send_message(
+                    chat_id=user_id,
+                    text="Произошла внутренняя ошибка. Попробуйте позже."
+                )
+            except Exception:
+                logger.warning(f"Не удалось отправить сообщение об ошибке пользователю {user_id}")
+
+        for admin_id in settings.admins:
+            try:
+                error_text = (
+                    f"<b>Unhandled Exception</b>\n"
+                    f"User: {user_id}\n"
+                    f"Update: {update.__class__.__name__}\n"
+                    f"Error: <code>{type(exception).__name__}: {exception}</code>"
+                )
+                await event.bot.send_message(chat_id=admin_id, text=error_text, parse_mode="HTML")
+            except Exception:
+                pass
 
     dp.include_routers(
         handlers_router
@@ -48,25 +89,32 @@ def create_dispatcher() -> Dispatcher:
 
 
 (WORKDIR / "sessions").mkdir(exist_ok=True, parents=True)
-# BaseAuth.session_dir = Path(__file__).parent / "sessions"
 
 
 async def on_bot_startup(bot: Bot):
     logger.info('Запуск бота...')
     await init_db()
     logger.info('База данных инициализирована!')
+
+    # Инициализация ConfigService
+    config_service = ConfigService(async_session)
+    WatcherFactory.set_config_service(config_service)
+    BarsWatcherManager.set_config_service(config_service)
+    OsepWatcherManager.set_config_service(config_service)
+    logger.info('ConfigService инициализирован!')
+
+    # Инициализация Redis
+    cache = RedisCacheService(settings.redis_url)
+    await cache.connect()
+    WatcherFactory.set_cache_service(cache)
+    logger.info('RedisCacheService инициализирован!')
+
     me = await bot.get_me()
     logger.info(f'Бот запущен! bot_id = {me.id} username = {me.username}')
     #===============
-    Path(WORKDIR / "cashed_files").mkdir(exist_ok=True)
-    cache = AsyncFileCacher(filename=WORKDIR / "cache.json")
-    async def autosave_cache():
-        while True:
-            await asyncio.sleep(300)
-            await cache.asave()
-    asyncio.create_task(autosave_cache())
-    asyncio.create_task(timer_cleanup_cache_documents())
-    #===============
+
+    LogService.cleanup_old_logs()
+    logger.info("Старые логи очищены")
 
     await BarsMonitor().start_monitoring()
     await OsepMonitor().start_monitoring()
@@ -81,16 +129,24 @@ async def on_bot_startup(bot: Bot):
         BotCommand(command='/start', description='Перезапустить бота'),
         BotCommand(command='/suggestion', description='Отправить предложение по улучшению бота'),
         BotCommand(command='/report', description='Отправить админу сообщение о неполадках'),
+        BotCommand(command="/settings", description="Настройки вотчеров")
     ])
 
 async def on_bot_shutdown(*args, **kwargs):
-    cache = AsyncFileCacher(filename="cache.json")
-    await cache.close()
+    # Отменить запланированные удаления файлов
+    await FileCacheManager.cancel_all()
+
+    cache = WatcherFactory.get_cache_service()
+    if cache:
+        await cache.close()
 
     BarsMonitor().unsubscribe(BarsWatcherManager.process_connection_event)
     OsepMonitor().unsubscribe(OsepWatcherManager.process_connection_event)
     await BarsMonitor().close()
     await OsepMonitor().close()
+
+    # Закрываем все сессии в пуле
+    await PoolSession.release_all()
 
 async def setup_webhook(bot: Bot) -> bool:
     url = f"{WEBHOOK_BASE_URL}{WEBHOOK_PATH}"
@@ -122,12 +178,17 @@ async def main():
     dp = create_dispatcher()
     dp.startup.register(on_bot_startup)
     dp.shutdown.register(on_bot_shutdown)
-    # app = create_prepared_webapp(bot, dp)
-    #
-    # web.run_app(app, host=WEBHOOK_HOST, port=WEBHOOK_PORT)
-    # await bot.delete_webhook(drop_pending_updates=True)
-    # await dp.start_polling(bot)
-    loop = asyncio.get_event_loop().set_debug(True)
+
+    loop = asyncio.get_event_loop()
+    loop.set_debug(True)
+
+    def handle_asyncio_exception(loop, context):
+        exception = context.get('exception')
+        message = context.get('message', 'Unhandled exception')
+        logger.error(f"Unhandled asyncio exception: {message}", exc_info=exception)
+
+    loop.set_exception_handler(handle_asyncio_exception)
+
     try:
         set_webhook = await setup_webhook(bot)
         if set_webhook:
@@ -162,7 +223,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    # main()
-
-
-

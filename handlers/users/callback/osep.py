@@ -6,12 +6,12 @@ from keyboards.inline import input_osep_data_keyboard, update_osep_data_keyboard
 from sqlalchemy.orm import sessionmaker
 from services.user import UserService
 from settings import WORKDIR
-# from watchers.notificator import OsepNotificator
-# from watchers import OsepWatcher, WatcherManagerFactory, TelegramNotificator
+
 from watchers.managers.watcher_manager import OsepWatcherManager
 from watchers.models.watcher_models import UserCredentials, WatcherType
-from watchers.services.cache_service import AsyncFileCacher
-from watchers.watchers import OsepWatcher
+from watchers.services.watcher_factory import WatcherFactory
+from watchers.core.exceptions import Auth2FA
+from watchers.connectors.connection_monitor import OsepMonitor
 from states.osepState import OsepState
 
 from loguru import logger
@@ -40,20 +40,19 @@ async def osep_command(msg: CallbackQuery, state: FSMContext, session: sessionma
         await msg.message.answer(msg_to_send, reply_markup=update_osep_data_keyboard(used_osep))
     await msg.answer()
     return
+
 @router.callback_query(F.data == 'osep_credentials')
 async def osep_credentials_command(msg: CallbackQuery, state: FSMContext, session: sessionmaker):
     user_service = UserService(session)
     if await user_service.check_osep(msg.from_user.id):
-        # manager = WatcherManagerFactory.get_manager(OsepWatcher)
-        # await manager.stop(msg.from_user.id)
         await OsepWatcherManager.stop_and_delete(msg.from_user.id)
-        # OsepNotificator.stop_watching(msg.from_user.id)
         await user_service.set_osep_status_used(msg.from_user.id, False)
     await msg.message.answer('Введите Логин ОСЭП:')
     await state.set_state(OsepState.osep_login)
     await msg.answer()
 
     return
+
 @router.message(OsepState.osep_login)
 async def osep_login_command(msg: Message, state: FSMContext, session: sessionmaker):
     await state.update_data(osep_login=msg.text)
@@ -68,23 +67,33 @@ async def osep_password_command(msg: Message, state: FSMContext, session: sessio
     user_service = UserService(session)
     await user_service.set_osep(msg.from_user.id, osep_login, msg.text)
     await msg.delete()
-    # await msg.answer('Данные для входа в ОСЭП сохранены!\n'
-    #                  'Жми на /start и выбирай "Оповещения ОСЭП" -> "Отслеживать ОСЭП"')
     await state.clear()
-    osep_watcher = OsepWatcher(
-        credentials=UserCredentials(
-            username=osep_login,
-            password=msg.text,
-            user_id=msg.from_user.id,
-            watcher_type=WatcherType.OSEP,
-        ),
-        cache_service=AsyncFileCacher(filename=WORKDIR / "cache.json"),
+
+    # Создаём auth и логинимся
+    auth, session_obj = WatcherFactory.create_auth_and_session(
+        user_id=msg.from_user.id,
+        service="osep",
+        login=osep_login,
+        password=msg.text,
+        watcher_type=WatcherType.OSEP
     )
 
-    # manager.add(msg.from_user.id, osep_watcher)
-    # # await manager.stop(msg.from_user.id)
-    # if not (await manager.start(msg.from_user.id)):
-    #     return
+    if not OsepMonitor().is_connected:
+        await msg.answer("Сервер ОСЭП в данный момент недоступен. Попробуйте позже.")
+        return
+
+    try:
+        res = await auth.login()
+    except Exception as e:
+        logger.error(f"Ошибка авторизации ОСЭП для {msg.from_user.id}: {e}")
+        await msg.answer("Произошла ошибка при авторизации. Попробуйте позже.")
+        return
+    if not res:
+        await msg.answer("Неверный логин или пароль")
+        return
+
+    # Создаём watcher через фабрику
+    osep_watcher = await WatcherFactory.create_osep_watcher(msg.from_user.id, auth)
     await osep_watcher.start()
     await user_service.set_osep_status_used(msg.from_user.id, True)
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание ОСЭП!')
@@ -96,18 +105,31 @@ async def watching_osep_command(msg: CallbackQuery, state: FSMContext, session: 
     user_service = UserService(session)
     osep_login = await user_service.get_osep_login(msg.from_user.id)
     osep_password = await user_service.get_osep_password(msg.from_user.id)
-    osep_watcher = OsepWatcher(
-        credentials=UserCredentials(
-            username=osep_login,
-            password=osep_password,
-            user_id=msg.from_user.id,
-            watcher_type=WatcherType.OSEP,
-        ),
-        cache_service=AsyncFileCacher(filename=WORKDIR / "cache.json"),
+
+    # Создаём auth и логинимся
+    auth, session_obj = WatcherFactory.create_auth_and_session(
+        user_id=msg.from_user.id,
+        service="osep",
+        login=osep_login,
+        password=osep_password,
+        watcher_type=WatcherType.OSEP
     )
-    # manager.add(msg.from_user.id, osep_watcher)
-    # if not (await manager.start(msg.from_user.id)):
-    #     return
+
+    if not OsepMonitor().is_connected:
+        await msg.answer("Сервер ОСЭП в данный момент недоступен. Попробуйте позже.")
+        return
+
+    try:
+        res = await auth.login()
+    except Exception as e:
+        logger.error(f"Ошибка авторизации ОСЭП для {msg.from_user.id}: {e}")
+        await msg.answer("Произошла ошибка при авторизации. Попробуйте позже.")
+        return
+    if not res:
+        await msg.answer("Неверный логин или пароль")
+        return
+
+    osep_watcher = await WatcherFactory.create_osep_watcher(msg.from_user.id, auth)
     await osep_watcher.start()
     await user_service.set_osep_status_used(msg.from_user.id, True)
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} поставил отслеживание ОСЭП!')
@@ -122,10 +144,7 @@ async def watching_osep_command(msg: CallbackQuery, state: FSMContext, session: 
 @router.callback_query(F.data == 'dont_watching_osep')
 async def watching_osep_command(msg: CallbackQuery, state: FSMContext, session: sessionmaker):
     user_service = UserService(session)
-    # manager = WatcherManagerFactory.get_manager(OsepWatcher)
-    # await manager.stop(msg.from_user.id)
     await OsepWatcherManager.stop_and_delete(msg.from_user.id)
-    # OsepNotificator.stop_watching(msg.from_user.id)
     await user_service.set_osep_status_used(msg.from_user.id, False)
     logger.info(f'Пользователь {msg.from_user.id} {msg.from_user.username} снял отслеживание ОСЭП!')
     await msg.answer('Уведомления о ОСЭПе выключены!')
