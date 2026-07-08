@@ -41,7 +41,7 @@ class FileCacheManager:
             await asyncio.sleep(ttl)
             if filepath.exists():
                 filepath.unlink()
-                logger.debug(f"Удалён файл кэша: {filename}")
+                logger.info(f"Удалён файл кэша: {filename}")
         except asyncio.CancelledError:
             pass  # Файл ещё нужен, удаление отменено
         except Exception as e:

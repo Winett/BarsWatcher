@@ -161,7 +161,7 @@ class OsepWatcher(BaseWatcher):
                     path = WORKDIR / Path(f"cashed_files/{filename}")
 
                     if not cached_meta:
-                        logger.debug(f"{self._logger_template} Скачивание вложения {attachment.name} ({attachment.size} bytes)...")
+                        logger.info(f"{self._logger_template} ⬇️ Скачивание вложения: {attachment.name} ({attachment.size} bytes)")
                         saved_path = await self.api.load_attachment_to_file(attachment, path)
                         if saved_path is None:
                             logger.warning(f"{self._logger_template} Вложение {attachment.name} пропущено (слишком большое)")
@@ -192,13 +192,13 @@ class OsepWatcher(BaseWatcher):
                             self.config.cache_file_ttl
                         )
                         load_data.append(DiskFile(path=path, original_name=attachment.name))
-                        logger.debug(f"{self._logger_template} Вложение {attachment.name} скачано на диск")
+                        logger.info(f"{self._logger_template} ✅ Вложение {attachment.name} скачано на диск")
                     else:
                         att_data = AttachmentData(**cached_meta)
                         path = WORKDIR / f"cashed_files/{file_hash}_{att_data.filename}.bin"
                         if path.exists():
                             load_data.append(DiskFile(path=path, original_name=att_data.filename))
-                            logger.debug(f"{self._logger_template} Вложение {attachment.name} из кэша на диске")
+                            logger.info(f"{self._logger_template} 📂 Вложение {attachment.name} загружено из кэша")
                         else:
                             logger.warning(f"{self._logger_template} Файл {filename} не найден на диске, пропуск")
 
@@ -227,7 +227,13 @@ class OsepWatcher(BaseWatcher):
                 files=load_data,
                 mail_message=mail_message,
             )
-            logger.info(f"{self._logger_template} Отправка уведомления о письме от {mail_message.sender_name}")
+            file_names = [f.original_name for f in load_data if isinstance(f, DiskFile)]
+            logger.info(
+                f"{self._logger_template} 📧 Новое письмо от {mail_message.sender_name} "
+                f"| Тема: {mail_message.subject[:50]}"
+                f" | Вложений: {len(file_names)}"
+                + (f" | Файлы: {', '.join(file_names)}" if file_names else "")
+            )
             EventService().notify_subscribers(watcher_event)
 
         except Exception as e:

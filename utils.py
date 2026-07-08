@@ -7,6 +7,7 @@ from aiogram import Bot
 
 from functools import wraps
 from services.log_service import LogService
+from settings import settings
 
 
 def logger_wraps(*, entry=True, exit=True, level="DEBUG"):
@@ -30,6 +31,7 @@ def logger_wraps(*, entry=True, exit=True, level="DEBUG"):
 
 def setup_logger(bot: Bot, admins: list[int]):
     loop = asyncio.get_running_loop()
+    log_level = "DEBUG" if settings.DEBUG else "INFO"
 
     def patch_logger(record):
         record.update(time=record['time'].astimezone(timezone(timedelta(hours=3))))
@@ -50,7 +52,7 @@ def setup_logger(bot: Bot, admins: list[int]):
                           " | <level>{level: <8}</level>"
                           " | {name}:{function}:{module}:{file}:{line}"
                           " - <magenta>{message}</magenta>",
-                "level": "DEBUG",
+                "level": log_level,
                 "backtrace": True,
                 "diagnose": True,
                 "enqueue": True,
@@ -61,7 +63,7 @@ def setup_logger(bot: Bot, admins: list[int]):
                           " | <level>{level: <8}</level>"
                           " | {name}:{function}:{module}:{file}:{line}"
                           " - <magenta>{message}</magenta>",
-                "level": "DEBUG",
+                "level": log_level,
                 "rotation": "00:00",
                 "backtrace": True,
                 "diagnose": True,
