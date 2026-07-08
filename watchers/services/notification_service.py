@@ -3,7 +3,7 @@ from html import escape as html_escape
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramRetryAfter
-from aiogram.types import BufferedInputFile, InputMediaDocument
+from aiogram.types import BufferedInputFile, FSInputFile, InputMediaDocument
 from loguru import logger
 
 from watchers.utils.rate_limiter import RateLimiter
@@ -11,7 +11,16 @@ from watchers.utils.rate_limiter import RateLimiter
 
 import asyncio
 
+from pathlib import Path
+from dataclasses import dataclass
+
 from watchers.models.mail_models import AttachmentData
+
+
+@dataclass
+class DiskFile:
+    path: Path
+    original_name: str
 
 
 class BaseNotificationService(ABC):
@@ -61,13 +70,20 @@ class TelegramNotificationService(BaseNotificationService):
         return html_escape(text)
 
     @staticmethod
-    def prepare_documents(files: list[AttachmentData]):
+    def prepare_documents(files: list):
         documents = []
 
         docs = []
         for file in files:
-            input_file = BufferedInputFile(file.content, filename=file.filename)
-            docs.append(InputMediaDocument(media=input_file, filename=file.filename))
+            if isinstance(file, DiskFile):
+                input_file = FSInputFile(file.path, filename=file.original_name)
+                docs.append(InputMediaDocument(media=input_file, filename=file.original_name))
+            elif isinstance(file, Path):
+                input_file = FSInputFile(file, filename=file.name)
+                docs.append(InputMediaDocument(media=input_file, filename=file.name))
+            else:
+                input_file = BufferedInputFile(file.content, filename=file.filename)
+                docs.append(InputMediaDocument(media=input_file, filename=file.filename))
             if len(docs) == 10:
                 documents.append(docs)
                 docs = []
@@ -75,7 +91,7 @@ class TelegramNotificationService(BaseNotificationService):
             documents.append(docs)
         return documents
 
-    async def send_message(self, user_id: int, message: str) -> bool:
+    async def send_message(self, user_id: int, message: str, _retries: int = 0, _max_retries: int = 5) -> bool:
         try:
             message_parts = list(self.prepare_message(message))
             last_message = None
@@ -91,14 +107,17 @@ class TelegramNotificationService(BaseNotificationService):
             return True
 
         except TelegramRetryAfter as e:
+            if _retries >= _max_retries:
+                logger.error(f"Превышен лимит retry для {user_id} ({_max_retries} попыток)")
+                return False
             await asyncio.sleep(e.retry_after)
-            return await self.send_message(user_id, message)
+            return await self.send_message(user_id, message, _retries + 1, _max_retries)
 
         except Exception as e:
             logger.warning(f"Ошибка отправки сообщения пользователю {user_id}: {e}")
             return False
 
-    async def send_message_with_documents(self, user_id: int, message: str, files: list[AttachmentData]) -> bool:
+    async def send_message_with_documents(self, user_id: int, message: str, files: list[AttachmentData], _retries: int = 0, _max_retries: int = 5) -> bool:
         try:
             if message:
                 await self.send_message(user_id, message)
@@ -115,8 +134,11 @@ class TelegramNotificationService(BaseNotificationService):
             return True
 
         except TelegramRetryAfter as e:
+            if _retries >= _max_retries:
+                logger.error(f"Превышен лимит retry для {user_id} ({_max_retries} попыток)")
+                return False
             await asyncio.sleep(e.retry_after)
-            return await self.send_message_with_documents(user_id, message, files)
+            return await self.send_message_with_documents(user_id, message, files, _retries + 1, _max_retries)
 
         except Exception as e:
             logger.warning(f"Ошибка отправки документов пользователю {user_id}: {e}")

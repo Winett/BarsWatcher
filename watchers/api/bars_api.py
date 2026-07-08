@@ -40,13 +40,10 @@ class BarsAPI(BaseAPI):
 
     @staticmethod
     def get_semester_id():
-        autumn_25_26 = 26
-        year = 2025
-        autumn = 9 <= datetime.now().month or datetime.now().month <= 1
-        if autumn:
-            return (datetime.now().year - year if datetime.now().month >= 9 else datetime.now().year - year - 1) * 2 + autumn_25_26
-        else:
-            return (datetime.now().year - year) * 2 - 1 + autumn_25_26
+        now = datetime.now()
+        academic_year = now.year if now.month >= 9 else now.year - 1
+        semester_offset = 0 if now.month >= 9 else 1
+        return (academic_year - 2025) * 2 + 26 + semester_offset
 
     @_rate_limit_fetcher
     async def get_marks(self) -> str:

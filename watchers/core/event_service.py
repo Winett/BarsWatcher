@@ -26,7 +26,7 @@ class EventService:
         self._subscribers.discard(callback)
 
     def notify_subscribers(self, event: Any):
-        for subscriber in self._subscribers:
+        for subscriber in list(self._subscribers):
             if asyncio.iscoroutinefunction(subscriber):
                 task = asyncio.create_task(subscriber(event))
                 task.add_done_callback(self._event_callback_for_coroutine)

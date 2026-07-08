@@ -3,6 +3,7 @@ import json
 from typing import Optional
 
 import aiohttp
+import aiofiles
 from loguru import logger
 
 from watchers.api.base_api import BaseAPI
@@ -158,6 +159,52 @@ class OsepAPI(BaseAPI):
             method="GET",
             params=params
         )
+
+    async def load_attachment_to_file(self, attachment: Attachment, save_path, max_size: int = 100 * 1024 * 1024):
+        """Скачать вложение на диск чанками, не загружая целиком в память."""
+        params = {
+            "id": attachment.attachment_id.id,
+            "X-OWA-CANARY": self.auth.x_owa_canary
+        }
+        headers = self.headers_to_update("GetFileAttachment")
+        url = f"{self.base_url}/owa/service.svc/s/GetFileAttachment"
+
+        try:
+            async with self.session.request(
+                "GET", url, params=params, headers=headers,
+                allow_redirects=False
+            ) as response:
+                if response.status in [302, 401]:
+                    from watchers.core.exceptions import AuthError
+                    raise AuthError("Ошибка авторизации")
+
+                content_length = response.content_length
+                if content_length and content_length > max_size:
+                    logger.warning(
+                        f"{self._logger_template} Вложение {attachment.name} слишком "
+                        f"большое: {content_length} байт (лимит {max_size})"
+                    )
+                    return None
+
+                written = 0
+                async with aiofiles.open(save_path, "wb") as f:
+                    async for chunk in response.content.iter_chunked(65536):
+                        written += len(chunk)
+                        if written > max_size:
+                            logger.warning(
+                                f"{self._logger_template} Вложение {attachment.name} "
+                                f"превысило лимит при скачивании"
+                            )
+                            await f.close()
+                            save_path.unlink(missing_ok=True)
+                            return None
+                        await f.write(chunk)
+
+                logger.debug(f"{self._logger_template} Вложение {attachment.name} скачано на диск ({written} байт)")
+                return save_path
+        except Exception as e:
+            logger.error(f"{self._logger_template} Ошибка скачивания вложения {attachment.name}: {e}")
+            raise
 
     async def find_conversations_from_folder(
         self,

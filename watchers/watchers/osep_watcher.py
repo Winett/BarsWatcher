@@ -18,6 +18,7 @@ from watchers.services.redis_cache_service import RedisCacheService
 from watchers.api.osep_api import OsepAPI
 from watchers.managers.watcher_manager import OsepWatcherManager
 from watchers.utils.file_cache_manager import FileCacheManager
+from watchers.services.notification_service import DiskFile
 from settings import WORKDIR
 
 
@@ -35,6 +36,7 @@ class OsepWatcher(BaseWatcher):
         self.api = api
         self.osep_config = osep_config or OsepWatcherConfig()
         self._folders_cache_key = f"osep_folders_{self.credentials.username}"
+        self._mail_tasks: set[asyncio.Task] = set()
 
     def _is_blacklisted(self, email: str) -> bool:
         """Проверить, есть ли email в blacklist (с поддержкой wildcard *)."""
@@ -119,7 +121,9 @@ class OsepWatcher(BaseWatcher):
                 conv_id = conversation.get("ConversationId", {}).get("Id")
                 if conv_id:
                     logger.debug(f"{self._logger_template} Запуск обработки conversation {conv_id}")
-                    asyncio.create_task(self._process_new_mail(conv_id))
+                    task = asyncio.create_task(self._process_new_mail(conv_id))
+                    self._mail_tasks.add(task)
+                    task.add_done_callback(self._mail_tasks.discard)
         except Exception as e:
             logger.error(f"{self._logger_template} Ошибка обработки папки {folder_id}: {e}")
 
@@ -148,29 +152,29 @@ class OsepWatcher(BaseWatcher):
             if new_message.has_attachments:
                 logger.debug(f"{self._logger_template} Вложений: {len(new_message.attachments)}")
                 for attachment in new_message.attachments:
-                    # Ключ на основе имени файла и размера — шарится между пользователями
                     file_hash = md5(f"{attachment.name}{attachment.size}".encode()).hexdigest()
                     attachment_cache_key = f"attachment_osep_{file_hash}"
-                    file = await self.cache_service.get(attachment_cache_key)
+                    cached_meta = await self.cache_service.get(attachment_cache_key)
 
-                    if not file:
+                    (WORKDIR / Path("cashed_files/")).mkdir(exist_ok=True)
+                    filename = f"{file_hash}_{attachment.name}.bin"
+                    path = WORKDIR / Path(f"cashed_files/{filename}")
+
+                    if not cached_meta:
                         logger.debug(f"{self._logger_template} Скачивание вложения {attachment.name} ({attachment.size} bytes)...")
-                        file_content = await self.api.load_attachment(attachment)
+                        saved_path = await self.api.load_attachment_to_file(attachment, path)
+                        if saved_path is None:
+                            logger.warning(f"{self._logger_template} Вложение {attachment.name} пропущено (слишком большое)")
+                            continue
+
                         att_data = AttachmentData(
                             id=attachment.attachment_id.id,
                             content_type=attachment.content_type,
                             filename=attachment.name,
                             size=attachment.size,
-                            content=file_content
+                            content=None
                         )
 
-                        (WORKDIR / Path("cashed_files/")).mkdir(exist_ok=True)
-                        filename = f"{file_hash}_{att_data.filename}.bin"
-                        path = WORKDIR / Path(f"cashed_files/{filename}")
-                        async with aiofiles.open(path, "wb") as f:
-                            await f.write(file_content)
-
-                        # Планировать удаление файла через cache_file_ttl
                         FileCacheManager.schedule_removal(
                             filename,
                             ttl=int(self.config.cache_file_ttl)
@@ -187,15 +191,16 @@ class OsepWatcher(BaseWatcher):
                             },
                             self.config.cache_file_ttl
                         )
-                        load_data.append(att_data)
-                        logger.debug(f"{self._logger_template} Вложение {attachment.name} скачано и закэшировано")
+                        load_data.append(DiskFile(path=path, original_name=attachment.name))
+                        logger.debug(f"{self._logger_template} Вложение {attachment.name} скачано на диск")
                     else:
-                        att_data = AttachmentData(**file)
+                        att_data = AttachmentData(**cached_meta)
                         path = WORKDIR / f"cashed_files/{file_hash}_{att_data.filename}.bin"
-                        async with aiofiles.open(path, "rb") as f:
-                            att_data.content = await f.read()
-                        load_data.append(att_data)
-                        logger.debug(f"{self._logger_template} Вложение {attachment.name} загружено из кэша")
+                        if path.exists():
+                            load_data.append(DiskFile(path=path, original_name=att_data.filename))
+                            logger.debug(f"{self._logger_template} Вложение {attachment.name} из кэша на диске")
+                        else:
+                            logger.warning(f"{self._logger_template} Файл {filename} не найден на диске, пропуск")
 
             mail_message = MailMessage(
                 conversation_id=new_message.conversation_id.id,
@@ -204,7 +209,15 @@ class OsepWatcher(BaseWatcher):
                 sender_name=new_message.from_.mail_box.name,
                 body=new_message.unique_body.value,
                 has_attachments=new_message.has_attachments,
-                attachments=load_data
+                attachments=[
+                    AttachmentData(
+                        id=a.attachment_id.id,
+                        content_type=a.content_type,
+                        filename=a.name,
+                        size=a.size,
+                        content=None
+                    ) for a in new_message.attachments
+                ] if new_message.has_attachments else []
             )
 
             watcher_event = self._generator_events(
@@ -219,6 +232,21 @@ class OsepWatcher(BaseWatcher):
 
         except Exception as e:
             logger.error(f"{self._logger_template} Ошибка обработки conversation {conversation_id}: {e}")
+
+    async def stop(self):
+        async with self._lifecycle_lock:
+            logger.info(f"{self._logger_template} Остановка")
+            self._is_running = False
+            for task in self._mail_tasks:
+                task.cancel()
+            self._mail_tasks.clear()
+            if self._task and not self._task.done():
+                self._task.cancel()
+                try:
+                    await self._task
+                except asyncio.CancelledError:
+                    pass
+            self._task = None
 
     async def close(self):
         from watchers.session.pool_session import PoolSession

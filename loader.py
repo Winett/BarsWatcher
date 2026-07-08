@@ -53,6 +53,7 @@ async def recover_notifications_over_restarting_bot(bot: Bot):
                 async with async_session() as session:
                     user_service = UserService(session)
                     await user_service.set_bars_status_used(user.user_id, False)
+                continue
 
             # Создаём watcher через фабрику
             bars_watcher = await WatcherFactory.create_bars_watcher(user.user_id, auth)

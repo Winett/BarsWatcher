@@ -33,6 +33,7 @@ class BaseWatcher(ABC):
         self._is_running = False
         self._is_pausing = False
         self._task: Optional[asyncio.Task] = None
+        self._lifecycle_lock = asyncio.Lock()
 
         # asyncio.Event: True = сервер доступен, False = недоступен
         self._server_available = asyncio.Event()
@@ -142,6 +143,10 @@ class BaseWatcher(ABC):
 
     async def _check_for_changes(self, new_data):
         """Проверка изменений и отправка уведомлений"""
+        if not new_data:
+            logger.warning(f"{self._logger_template} Пустые данные, кэш не обновлён")
+            return
+
         cache_key = f"{self.__class__.__name__}_{self.credentials.username}"
 
         old_data = await self.cache_service.get(cache_key)
@@ -205,6 +210,7 @@ class BaseWatcher(ABC):
         if not self._is_pausing:
             self._stats.status = WatcherStatus.STOPPED
         self._is_pausing = False
+        await self.close()
 
     def on_server_available(self):
         """Вызывается когда сервер становится доступным."""
@@ -217,55 +223,60 @@ class BaseWatcher(ABC):
         self._server_available.clear()
 
     async def restart(self):
-        logger.info(f"{self._logger_template} Перезапуск")
-        if not self._task or self._task.done():
-            self._task = asyncio.create_task(self.run())
-        else:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+        async with self._lifecycle_lock:
+            logger.info(f"{self._logger_template} Перезапуск")
+            if self._task and not self._task.done():
+                self._task.cancel()
+                try:
+                    await self._task
+                except asyncio.CancelledError:
+                    pass
+            self._is_running = True
             self._task = asyncio.create_task(self.run())
 
     async def start(self):
         """Запуск вотчера"""
-        if self._task and not self._task.done():
-            logger.debug(f"{self._logger_template} Уже запущен, пропуск")
-            return
-
-        logger.info(f"{self._logger_template} Запуск")
-        self._task = asyncio.create_task(self.run())
+        async with self._lifecycle_lock:
+            if self._task and not self._task.done():
+                logger.debug(f"{self._logger_template} Уже запущен, пропуск")
+                return
+            logger.info(f"{self._logger_template} Запуск")
+            self._is_running = True
+            self._task = asyncio.create_task(self.run())
 
     async def stop(self):
         """Остановка вотчера"""
-        logger.info(f"{self._logger_template} Остановка")
-        self._is_running = False
-
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+        async with self._lifecycle_lock:
+            logger.info(f"{self._logger_template} Остановка")
+            self._is_running = False
+            if self._task and not self._task.done():
+                self._task.cancel()
+                try:
+                    await self._task
+                except asyncio.CancelledError:
+                    pass
+            self._task = None
 
     async def pause(self):
         """Пауза вотчера"""
-        logger.info(f"{self._logger_template} Пауза")
-        self._is_pausing = True
-        self._is_running = False
-        self._stats.status = WatcherStatus.PAUSED
+        async with self._lifecycle_lock:
+            logger.info(f"{self._logger_template} Пауза")
+            self._is_pausing = True
+            self._is_running = False
+            self._stats.status = WatcherStatus.PAUSED
 
     async def resume(self):
         """Возобновление работы"""
-        logger.info(f"{self._logger_template} Возобновление")
-        if self._task and not self._task.done():
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        self._task = asyncio.create_task(self.run())
+        async with self._lifecycle_lock:
+            logger.info(f"{self._logger_template} Возобновление")
+            if self._task and not self._task.done():
+                self._task.cancel()
+                try:
+                    await self._task
+                except asyncio.CancelledError:
+                    pass
+            self._is_running = True
+            self._task = asyncio.create_task(self.run())
 
     def subscribe(self, handler: Callable[[WatcherEvent], Awaitable[None]]):
         """Подписка на события"""

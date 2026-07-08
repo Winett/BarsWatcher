@@ -105,7 +105,7 @@ async def test_watcher_runs_until_manual_stop(creds, fast_config, cache):
     await asyncio.sleep(0.05)
 
     assert not watcher.is_running
-    assert watcher._task.done()
+    assert watcher._task is None
     assert watcher.stats.status == WatcherStatus.STOPPED
 
 
