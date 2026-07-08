@@ -1,5 +1,6 @@
 from typing import Any, Callable
 import asyncio
+from loguru import logger
 
 
 class EventService:
@@ -34,8 +35,7 @@ class EventService:
 
     def _event_callback_for_coroutine(self, task: asyncio.Task):
         if task.exception():
-            import traceback
-            traceback.print_exception(type(task.exception()), task.exception(), task.exception().__traceback__)
+            logger.error("Ошибка в подписчике EventService", exc_info=task.exception())
 
     def close(self):
         self._subscribers.clear()

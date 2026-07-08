@@ -8,6 +8,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types.bot_command import BotCommand
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import ErrorEvent
 
 from watchers.connectors.connection_monitor import BarsMonitor, OsepMonitor
 from watchers.managers.watcher_manager import OsepWatcherManager, BarsWatcherManager
@@ -45,6 +46,40 @@ def create_dispatcher() -> Dispatcher:
     dp.callback_query.middleware(DatabaseMiddleware())
     dp.update.outer_middleware(ThrottlingMiddleware())
     dp.update.outer_middleware(LoggingMiddleware())
+
+    @dp.errors()
+    async def global_error_handler(event: ErrorEvent):
+        update = event.update
+        exception = event.exception
+        user_id = None
+
+        if update.message:
+            user_id = update.message.from_user.id
+        elif update.callback_query:
+            user_id = update.callback_query.from_user.id
+
+        logger.error(f"Unhandled exception в хендлере: {exception}", exc_info=exception)
+
+        if user_id:
+            try:
+                await event.bot.send_message(
+                    chat_id=user_id,
+                    text="Произошла внутренняя ошибка. Попробуйте позже."
+                )
+            except Exception:
+                logger.warning(f"Не удалось отправить сообщение об ошибке пользователю {user_id}")
+
+        for admin_id in settings.admins:
+            try:
+                error_text = (
+                    f"<b>Unhandled Exception</b>\n"
+                    f"User: {user_id}\n"
+                    f"Update: {update.__class__.__name__}\n"
+                    f"Error: <code>{type(exception).__name__}: {exception}</code>"
+                )
+                await event.bot.send_message(chat_id=admin_id, text=error_text, parse_mode="HTML")
+            except Exception:
+                pass
 
     dp.include_routers(
         handlers_router
@@ -144,7 +179,16 @@ async def main():
     dp.startup.register(on_bot_startup)
     dp.shutdown.register(on_bot_shutdown)
 
-    loop = asyncio.get_event_loop().set_debug(True)
+    loop = asyncio.get_event_loop()
+    loop.set_debug(True)
+
+    def handle_asyncio_exception(loop, context):
+        exception = context.get('exception')
+        message = context.get('message', 'Unhandled exception')
+        logger.error(f"Unhandled asyncio exception: {message}", exc_info=exception)
+
+    loop.set_exception_handler(handle_asyncio_exception)
+
     try:
         set_webhook = await setup_webhook(bot)
         if set_webhook:

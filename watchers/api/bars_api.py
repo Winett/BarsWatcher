@@ -147,7 +147,8 @@ class BarsAPI(BaseAPI):
                         marks.append(mark)
                         km_index += 1
 
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"Ошибка парсинга строки оценки в '{name_of_discipline}': {e}")
                         continue
 
                 mark_PA = ""
@@ -171,7 +172,8 @@ class BarsAPI(BaseAPI):
                     mark_final=mark_final
                 )
 
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Ошибка парсинга дисциплины: {e}")
                 continue
 
         return data
