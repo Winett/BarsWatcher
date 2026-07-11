@@ -90,7 +90,7 @@ async def bars_password_command(msg: Message, state: FSMContext, session: sessio
         await state.set_state(BarsState.af2_code)
         # Сохраняем auth в state для обработки 2FA
         await state.update_data(bars_auth=auth)
-        logger.debug(f"Пользователь {msg.from_user.id} {msg.from_user.username} ожидает 2FA код")
+        logger.info(f"Пользователь {msg.from_user.id} {msg.from_user.username} ожидает 2FA код")
         await msg.answer("Введите код 2FA")
         return
     except Exception as e:
@@ -168,7 +168,7 @@ async def watching_bars_command(msg: CallbackQuery, state: FSMContext, session: 
         await auth.send_2fa_code()
         await state.set_state(BarsState.af2_code)
         await state.update_data(bars_auth=auth)
-        logger.debug(f"Пользователь {msg.from_user.id} {msg.from_user.username} ожидает 2FA код")
+        logger.info(f"Пользователь {msg.from_user.id} {msg.from_user.username} ожидает 2FA код")
         await msg.message.answer("Введите код 2FA")
         return
     except Exception as e:

@@ -13,10 +13,10 @@ class LoggingMiddleware(BaseMiddleware):
             message = f'[CallbackQuery: {event.callback_query.data}]'
         if (data.get('raw_state') is not None) and data.get('raw_state') in ['BarsState:bars_password', 'OsepState:osep_password']:
             message = f"[Watcher: Ввели пароль]"
-        logger.debug(f"[user_id = {data['event_from_user'].id}] - [username = {data['event_from_user'].username}] - {message}")
+        logger.info(f"[user_id = {data['event_from_user'].id}] - [username = {data['event_from_user'].username}] - {message}")
         async with async_session() as session:
             try:
                 await UserService(session).update_username(data['event_from_user'].id, data['event_from_user'].username)
             except AttributeError as e:
-                logger.debug(f"Не удалось обновить username для {data['event_from_user'].id}: {e}")
+                logger.info(f"Не удалось обновить username для {data['event_from_user'].id}: {e}")
         return await handler(event, data)
