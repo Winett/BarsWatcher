@@ -24,15 +24,19 @@ class LogService:
             return []
 
         date_str = datetime.now().strftime("%Y-%m-%d")
-        file_size = log_path.stat().st_size
         cls._ensure_dir()
 
-        if file_size <= cls.CHUNK_SIZE:
-            zip_path = cls.LOGS_DIR / f"{date_str}.zip"
-            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-                zf.write(log_path, log_path.name)
+        # Сначала пробуем заархивировать файл целиком
+        zip_path = cls.LOGS_DIR / f"{date_str}.zip"
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.write(log_path, log_path.name)
+
+        # Если архив влезает в лимит Telegram — возвращаем его
+        if zip_path.stat().st_size <= cls.MAX_SIZE:
             return [zip_path]
 
+        # Архив слишком большой — дробим исходный файл на части
+        zip_path.unlink()
         chunks = []
         part = 0
         with open(log_path, "rb") as f:
