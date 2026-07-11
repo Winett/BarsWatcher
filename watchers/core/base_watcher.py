@@ -32,6 +32,7 @@ class BaseWatcher(ABC):
         self._stats = WatcherStats()
         self._is_running = False
         self._is_pausing = False
+        self._is_restarting = False
         self._task: Optional[asyncio.Task] = None
         self._lifecycle_lock = asyncio.Lock()
 
@@ -210,7 +211,8 @@ class BaseWatcher(ABC):
         if not self._is_pausing:
             self._stats.status = WatcherStatus.STOPPED
         self._is_pausing = False
-        await self.close()
+        if not self._is_restarting:
+            await self.close()
 
     def on_server_available(self):
         """Вызывается когда сервер становится доступным."""
@@ -225,12 +227,14 @@ class BaseWatcher(ABC):
     async def restart(self):
         async with self._lifecycle_lock:
             logger.info(f"{self._logger_template} Перезапуск")
+            self._is_restarting = True
             if self._task and not self._task.done():
                 self._task.cancel()
                 try:
                     await self._task
                 except asyncio.CancelledError:
                     pass
+            self._is_restarting = False
             self._is_running = True
             self._task = asyncio.create_task(self.run())
 
@@ -269,12 +273,14 @@ class BaseWatcher(ABC):
         """Возобновление работы"""
         async with self._lifecycle_lock:
             logger.info(f"{self._logger_template} Возобновление")
+            self._is_restarting = True
             if self._task and not self._task.done():
                 self._task.cancel()
                 try:
                     await self._task
                 except asyncio.CancelledError:
                     pass
+            self._is_restarting = False
             self._is_running = True
             self._task = asyncio.create_task(self.run())
 
