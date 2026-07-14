@@ -207,11 +207,12 @@ class BaseWatcher(ABC):
 
     async def _cleanup(self):
         """Очистка ресурсов"""
+        should_close = not self._is_restarting and not self._is_pausing
         self._is_running = False
         if not self._is_pausing:
             self._stats.status = WatcherStatus.STOPPED
         self._is_pausing = False
-        if not self._is_restarting:
+        if should_close:
             await self.close()
 
     def on_server_available(self):

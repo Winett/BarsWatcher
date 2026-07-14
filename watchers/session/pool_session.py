@@ -2,19 +2,47 @@ import aiohttp
 
 
 class PoolSession:
-    """Пул HTTP-сессий по (user_id, service)."""
+    """Пул HTTP-сессий по (user_id, service).
 
+    - TCPConnector разделяется между пользователями на один домен
+    - cookie_jar переносится из закрытой сессии (защита от реавторизации)
+    """
+
+    _connectors: dict[str, aiohttp.TCPConnector] = {}
     _sessions: dict[tuple[int, str], aiohttp.ClientSession] = {}
+
+    @classmethod
+    def _get_connector(cls, domain: str) -> aiohttp.TCPConnector:
+        if domain not in cls._connectors:
+            cls._connectors[domain] = aiohttp.TCPConnector(
+                ssl=False,
+                limit=100,
+                limit_per_host=10,
+                enable_cleanup_closed=True,
+                keepalive_timeout=30,
+                ttl_dns_cache=300,
+            )
+        return cls._connectors[domain]
 
     @classmethod
     def get_or_create(cls, user_id: int, service: str, timeout: int = 30) -> aiohttp.ClientSession:
         key = (user_id, service)
         if key in cls._sessions and not cls._sessions[key].closed:
             return cls._sessions[key]
+
+        # Определяем домен из service или используем дефолт
+        domain = cls._service_to_domain(service)
+
+        # Передаём cookie_jar из закрытой сессии (сохраняем авторизацию)
+        old_session = cls._sessions.get(key)
+        cookie_jar = old_session.cookie_jar if old_session and old_session.closed else aiohttp.CookieJar()
+
         session = aiohttp.ClientSession(
+            connector=cls._get_connector(domain),
             timeout=aiohttp.ClientTimeout(total=timeout),
-            connector=aiohttp.TCPConnector(ssl=False)
+            cookie_jar=cookie_jar,
         )
+
         cls._sessions[key] = session
         return session
 
@@ -29,3 +57,16 @@ class PoolSession:
     async def release_all(cls):
         for key in list(cls._sessions.keys()):
             await cls.release(*key)
+
+        # Закрываем все коннекторы
+        for connector in cls._connectors.values():
+            if not connector.closed:
+                await connector.close()
+        cls._connectors.clear()
+
+    @classmethod
+    def _service_to_domain(cls, service: str) -> str:
+        return {
+            "bars": "bars.mpei.ru",
+            "osep": "mail.mpei.ru",
+        }.get(service, service)
