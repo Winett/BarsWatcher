@@ -5,14 +5,23 @@ from hashlib import md5
 from pathlib import Path
 import fnmatch
 
-import aiofiles
 from loguru import logger
 
 from watchers.core.base_watcher import BaseWatcher
 from watchers.core.event_service import EventService
-from watchers.models.watcher_models import UserCredentials, WatcherConfig, WatcherType, EventType, OsepWatcherConfig
+from watchers.models.watcher_models import (
+    UserCredentials,
+    WatcherConfig,
+    WatcherType,
+    EventType,
+    OsepWatcherConfig,
+)
 from watchers.models.mail_models import (
-    MailMessage, AttachmentData, Folder, Folders, NewMailEvent
+    MailMessage,
+    AttachmentData,
+    Folder,
+    Folders,
+    NewMailEvent,
 )
 from watchers.services.redis_cache_service import RedisCacheService
 from watchers.api.osep_api import OsepAPI
@@ -56,7 +65,9 @@ class OsepWatcher(BaseWatcher):
         folders = await self.api.get_folders()
         self._stats.last_fetch_time = datetime.now()
         result = {folder.display_name: folder for folder in folders.folders}
-        logger.debug(f"{self._logger_template} osep_api.get_folders() OK | папок: {len(result)}")
+        logger.debug(
+            f"{self._logger_template} osep_api.get_folders() OK | папок: {len(result)}"
+        )
         return result
 
     async def process_data(self, data: Dict) -> Dict:
@@ -67,21 +78,33 @@ class OsepWatcher(BaseWatcher):
     async def detect_changes(self, old_data: Dict, new_data: Dict) -> List[str]:
         """Обнаружение новых писем через сравнение count'ов папок"""
         if not old_data or not new_data:
-            logger.debug(f"{self._logger_template} detect_changes: нет данных для сравнения")
+            logger.debug(
+                f"{self._logger_template} detect_changes: нет данных для сравнения"
+            )
             return []
 
         ignore_folders = {
-            "Журнал", "Задачи", "Заметки", "Исходящие", "Нежелательная почта",
-            "Отправленные", "Удаленные", "Черновики",
-            "Conversation Action Settings", "Working Set",
+            "Журнал",
+            "Задачи",
+            "Заметки",
+            "Исходящие",
+            "Нежелательная почта",
+            "Отправленные",
+            "Удаленные",
+            "Черновики",
+            "Conversation Action Settings",
+            "Working Set",
             "{06967759-274D-40B2-A3EB-D7F9E73727D7}",
             "{A9E2BC46-B3A0-4243-B315-60D991004455}",
-            "GAL Contacts", "Recipient Cache"
+            "GAL Contacts",
+            "Recipient Cache",
         }
 
         changes = []
-        new_folders = {name: Folder(**data) if isinstance(data, dict) else data
-                       for name, data in new_data.items()}
+        new_folders = {
+            name: Folder(**data) if isinstance(data, dict) else data
+            for name, data in new_data.items()
+        }
 
         for folder_name, old_folder in old_data.items():
             if folder_name in ignore_folders:
@@ -91,45 +114,62 @@ class OsepWatcher(BaseWatcher):
             if not new_folder:
                 continue
 
-            old_count = old_folder.get('total_count', 0) if isinstance(old_folder, dict) else old_folder.total_count
+            old_count = (
+                old_folder.get("total_count", 0)
+                if isinstance(old_folder, dict)
+                else old_folder.total_count
+            )
             new_count = new_folder.total_count
 
             if old_count < new_count:
                 diff = new_count - old_count
-                logger.info(f"{self._logger_template} Новых писем в '{folder_name}': +{diff} (было {old_count}, стало {new_count})")
+                logger.info(
+                    f"{self._logger_template} Новых писем в '{folder_name}': +{diff} (было {old_count}, стало {new_count})"
+                )
                 await self._process_new_folder_mail(
-                    folder_id=new_folder.folder_id.id,
-                    new_count=diff
+                    folder_id=new_folder.folder_id.id, new_count=diff
                 )
 
-        logger.debug(f"{self._logger_template} detect_changes: {len(changes)} изменений")
+        logger.debug(
+            f"{self._logger_template} detect_changes: {len(changes)} изменений"
+        )
         return changes
 
     async def _process_new_folder_mail(self, folder_id: str, new_count: int):
         """Обработка новых писем в папке"""
-        logger.debug(f"{self._logger_template} Поиск conversations в папке {folder_id}...")
+        logger.debug(
+            f"{self._logger_template} Поиск conversations в папке {folder_id}..."
+        )
         try:
             conversations = await self.api.find_conversations_from_folder(
                 folder_id=folder_id,
                 type_folder_id="FolderId",
-                max_entries_returned=new_count
+                max_entries_returned=new_count,
             )
             conversations = conversations.get("Body", {}).get("Conversations", [])
-            logger.debug(f"{self._logger_template} Найдено conversations: {len(conversations)}")
+            logger.debug(
+                f"{self._logger_template} Найдено conversations: {len(conversations)}"
+            )
 
             for conversation in conversations:
                 conv_id = conversation.get("ConversationId", {}).get("Id")
                 if conv_id:
-                    logger.debug(f"{self._logger_template} Запуск обработки conversation {conv_id}")
+                    logger.debug(
+                        f"{self._logger_template} Запуск обработки conversation {conv_id}"
+                    )
                     task = asyncio.create_task(self._process_new_mail(conv_id))
                     self._mail_tasks.add(task)
                     task.add_done_callback(self._mail_tasks.discard)
         except Exception as e:
-            logger.error(f"{self._logger_template} Ошибка обработки папки {folder_id}: {e}")
+            logger.error(
+                f"{self._logger_template} Ошибка обработки папки {folder_id}: {e}"
+            )
 
     async def _process_new_mail(self, conversation_id: str):
         """Обработка одного нового письма"""
-        logger.debug(f"{self._logger_template} Обработка conversation {conversation_id}...")
+        logger.debug(
+            f"{self._logger_template} Обработка conversation {conversation_id}..."
+        )
         try:
             items = await self.api.get_conversation_items(conversation_id)
             new_message = items.conversation_nodes[0].items[0]
@@ -150,9 +190,18 @@ class OsepWatcher(BaseWatcher):
 
             load_data = []
             if new_message.has_attachments:
-                logger.debug(f"{self._logger_template} Вложений: {len(new_message.attachments)}")
+                logger.debug(
+                    f"{self._logger_template} Вложений: {len(new_message.attachments)}"
+                )
                 for attachment in new_message.attachments:
-                    file_hash = md5(f"{attachment.name}{attachment.size}".encode()).hexdigest()
+                    # Для маленьких файлов (< 1 КБ) добавляем user_id в хеш,
+                    # чтобы персональные данные (расчётные листы) не кэшировались совместно
+                    # Для больших файлов — только имя + размер (совместное кэширование)
+                    if attachment.size < 1024:
+                        file_hash = md5(f"{self.credentials.user_id}{attachment.name}{attachment.size}".encode()).hexdigest()
+                    else:
+                        file_hash = md5(f"{attachment.name}{attachment.size}".encode()).hexdigest()
+
                     attachment_cache_key = f"attachment_osep_{file_hash}"
                     cached_meta = await self.cache_service.get(attachment_cache_key)
 
@@ -209,15 +258,20 @@ class OsepWatcher(BaseWatcher):
                 sender_name=new_message.from_.mail_box.name,
                 body=new_message.unique_body.value,
                 has_attachments=new_message.has_attachments,
-                attachments=[
-                    AttachmentData(
-                        id=a.attachment_id.id,
-                        content_type=a.content_type,
-                        filename=a.name,
-                        size=a.size,
-                        content=None
-                    ) for a in new_message.attachments
-                ] if new_message.has_attachments else []
+                attachments=(
+                    [
+                        AttachmentData(
+                            id=a.attachment_id.id,
+                            content_type=a.content_type,
+                            filename=a.name,
+                            size=a.size,
+                            content=None,
+                        )
+                        for a in new_message.attachments
+                    ]
+                    if new_message.has_attachments
+                    else []
+                ),
             )
 
             watcher_event = self._generator_events(
@@ -237,7 +291,9 @@ class OsepWatcher(BaseWatcher):
             EventService().notify_subscribers(watcher_event)
 
         except Exception as e:
-            logger.error(f"{self._logger_template} Ошибка обработки conversation {conversation_id}: {e}")
+            logger.error(
+                f"{self._logger_template} Ошибка обработки conversation {conversation_id}: {e}"
+            )
 
     async def stop(self):
         async with self._lifecycle_lock:
@@ -256,6 +312,7 @@ class OsepWatcher(BaseWatcher):
 
     async def close(self):
         from watchers.session.pool_session import PoolSession
+
         logger.debug(f"{self._logger_template} Закрытие сессии...")
         await PoolSession.release(self.credentials.user_id, "osep")
         logger.debug(f"{self._logger_template} Сессия закрыта")
