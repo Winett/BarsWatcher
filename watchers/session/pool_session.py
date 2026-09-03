@@ -4,7 +4,8 @@ import aiohttp
 class PoolSession:
     """Пул HTTP-сессий по (user_id, service).
 
-    - TCPConnector разделяется между пользователями на один домен
+    - TCPConnector разделяется между пользователями на один домен (DNS-кэш, keepalive)
+    - connector_owner=False: закрытие сессии НЕ закрывает коннектор
     - cookie_jar переносится из закрытой сессии (защита от реавторизации)
     """
 
@@ -39,6 +40,7 @@ class PoolSession:
 
         session = aiohttp.ClientSession(
             connector=cls._get_connector(domain),
+            connector_owner=False,  # Коннектор не закрывается при закрытии сессии
             timeout=aiohttp.ClientTimeout(total=timeout),
             cookie_jar=cookie_jar,
         )
@@ -52,13 +54,15 @@ class PoolSession:
         session = cls._sessions.pop(key, None)
         if session and not session.closed:
             await session.close()
+            # Коннектор НЕ закрывается — он шарится между пользователями
 
     @classmethod
     async def release_all(cls):
+        """Закрыть все сессии и коннекторы (вызывается при shutdown)."""
         for key in list(cls._sessions.keys()):
             await cls.release(*key)
 
-        # Закрываем все коннекторы
+        # Закрываем все коннекторы только при полном shutdown
         for connector in cls._connectors.values():
             if not connector.closed:
                 await connector.close()
