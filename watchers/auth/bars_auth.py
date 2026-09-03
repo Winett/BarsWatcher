@@ -5,7 +5,9 @@ from loguru import logger
 
 from watchers.auth.base_auth import BaseAuth
 from watchers.core.exceptions import (
-    Auth2FA, DataParsingError, RequestVerificationTokenError
+    Auth2FA,
+    DataParsingError,
+    RequestVerificationTokenError,
 )
 from watchers.utils.decorators import retry
 from watchers.utils.rate_limiter import RateLimiter
@@ -25,8 +27,7 @@ class BarsAuth(BaseAuth):
 
     async def is_authenticated(self) -> bool:
         async with self.session.get(
-            f"{self.BASE_URL}/ST/Student/ListStudent",
-            allow_redirects=False
+            f"{self.BASE_URL}/ST/Student/ListStudent", allow_redirects=False
         ) as response:
             if response.status == 200:
                 return True
@@ -37,25 +38,23 @@ class BarsAuth(BaseAuth):
         self.session.cookie_jar.clear()
 
         async with self.session.get(
-            f"{self.BASE_URL}/",
-            allow_redirects=False
+            f"{self.BASE_URL}/", allow_redirects=False
         ) as response:
             content = await response.text()
 
         search = re.search(
             r'name="__RequestVerificationToken" type="\w+" value="(.+)" \/><input',
-            content
+            content,
         )
         if not search:
             raise DataParsingError(
                 "Не удалось получить страницу для получения токена __RequestVerificationToken",
-                content
+                content,
             )
         request_verification_token = search.group(1)
         if not request_verification_token:
             raise RequestVerificationTokenError(
-                "Не удалось извлечь токен __RequestVerificationToken",
-                content=content
+                "Не удалось извлечь токен __RequestVerificationToken", content=content
             )
 
         data = {
@@ -63,12 +62,10 @@ class BarsAuth(BaseAuth):
             "StopOpenDefault": False,
             "Account": self.credentials.username,
             "Password": self.credentials.password,
-            "RememberMe": True
+            "RememberMe": True,
         }
         async with self.session.post(
-            f"{self.BASE_URL}/",
-            data=data,
-            allow_redirects=False
+            f"{self.BASE_URL}/", data=data, allow_redirects=False
         ) as response:
             content = await response.text()
 
@@ -78,31 +75,36 @@ class BarsAuth(BaseAuth):
         if not cookies.get("auth_bars"):
             search = re.search(
                 r'name="__RequestVerificationToken" type="\w+" value="(.+)" \/><input',
-                content
+                content,
             )
             if not search:
                 raise DataParsingError(
                     "Не удалось получить страницу для получения токена __RequestVerificationToken",
-                    content
+                    content,
                 )
             request_verification_token = search.group(1)
             self._request_verification_token = request_verification_token
-            soup = BeautifulSoup(content, 'html.parser')
+            soup = BeautifulSoup(content, "html.parser")
             onclick = soup.find("a", id="btnSend").get("onclick")
-            self._type_2fa_send_code = onclick.split(" ")[-1].split("'")[1]
+            # На момент исправления onclick выглядит так: af2_code_send('btnSend', '/bars_web/Auth/JSON_SendAF2_Code', '2', '4');
+            self._type_2fa_send_code = onclick.split(" ")[-2].split("'")[1]
             raise Auth2FA("Требуется ввести код 2FA")
 
-        if (self.session.cookie_jar.filter_cookies(f"{self.BASE_URL}/").get('auth_bars')
-                or await self.is_authenticated()):
+        if (
+            self.session.cookie_jar.filter_cookies(f"{self.BASE_URL}/").get("auth_bars")
+            or await self.is_authenticated()
+        ):
             self._save_cookies()
             return True
 
         return False
 
     async def send_2fa_code(self):
-        await self.session.get(
+        logger.debug("Попытка откправить 2FA код")
+        response = await self.session.get(
             f"{self.BASE_URL}/Auth/JSON_SendAF2_Code?tid={self._type_2fa_send_code}"
         )
+        logger.debug(f"Ответ после отправки 2FA кода: {await response.text()}")
 
     async def verify_2fa_code(self, code: str) -> bool:
         data = {
@@ -113,23 +115,21 @@ class BarsAuth(BaseAuth):
             "AF2_Code": code,
         }
         async with self.session.post(
-            f"{self.BASE_URL}/Auth/LoginCode",
-            data=data
+            f"{self.BASE_URL}/Auth/LoginCode", data=data
         ) as response:
             content = await response.text()
-
-        if self.session.cookie_jar.filter_cookies(f"{self.BASE_URL}/").get('auth_bars'):
+        if self.session.cookie_jar.filter_cookies(f"{self.BASE_URL}/").get("auth_bars"):
             self._save_cookies()
             return True
 
         search = re.search(
             r'name="__RequestVerificationToken" type="\w+" value="(.+)" \/><input',
-            content
+            content,
         )
         if not search:
             raise DataParsingError(
                 "Не удалось получить страницу для получения токена __RequestVerificationToken",
-                content
+                content,
             )
         request_verification_token = search.group(1)
         self._request_verification_token = request_verification_token
