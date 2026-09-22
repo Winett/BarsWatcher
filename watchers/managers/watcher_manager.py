@@ -9,12 +9,22 @@ from loguru import logger
 from watchers.core.event_service import EventService
 from watchers.core.base_watcher import BaseWatcher
 from watchers.models.watcher_models import (
-    UserCredentials, WatcherType, WatcherEvent, EventType, WatcherStatus
+    UserCredentials,
+    WatcherType,
+    WatcherEvent,
+    EventType,
+    WatcherStatus,
 )
 from watchers.models.connection_monitor_models import ConnectionStatus
 from watchers.models.mail_models import AttachmentData
 from watchers.services.notification_service import TelegramNotificationService
-from watchers.core.exceptions import AuthError, DataParsingError, ResponseError, RequestVerificationTokenError, Auth2FA
+from watchers.core.exceptions import (
+    AuthError,
+    DataParsingError,
+    ResponseError,
+    RequestVerificationTokenError,
+    Auth2FA,
+)
 
 from services.user import UserService
 from database.db import async_session
@@ -22,7 +32,7 @@ from settings import settings
 from uuid import uuid4
 from html import escape as html_escape
 
-W = TypeVar('W', bound=BaseWatcher)
+W = TypeVar("W", bound=BaseWatcher)
 
 
 class WatcherManager(ABC, Generic[W]):
@@ -34,8 +44,8 @@ class WatcherManager(ABC, Generic[W]):
     _config_service = None
 
     # Конфигурация staggered resume (дефолты, если нет GlobalConfig)
-    STAGGER_DELAY = 2.0    # Базовая задержка между вотчерами (сек)
-    STAGGER_JITTER = 3.0   # Случайный разброс (сек)
+    STAGGER_DELAY = 2.0  # Базовая задержка между вотчерами (сек)
+    STAGGER_JITTER = 3.0  # Случайный разброс (сек)
 
     @classmethod
     def set_config_service(cls, config_service):
@@ -85,7 +95,9 @@ class WatcherManager(ABC, Generic[W]):
         """Добавить вотчер в очередь ожидания (при недоступности сервера)."""
         pending = cls._get_pending()
         pending[user_id] = credentials
-        logger.info(f"{cls.__name__} | Вотчер {user_id} добавлен в очередь ожидания ({len(pending)} в очереди)")
+        logger.info(
+            f"{cls.__name__} | Вотчер {user_id} добавлен в очередь ожидания ({len(pending)} в очереди)"
+        )
 
     @classmethod
     def remove_pending_watcher(cls, user_id: int):
@@ -107,7 +119,9 @@ class WatcherManager(ABC, Generic[W]):
             try:
                 await cls._create_and_start_from_pending(user_id, creds_data)
             except Exception as e:
-                logger.error(f"{cls.__name__} | Ошибка запуска вотчер {user_id} из очереди: {e}")
+                logger.error(
+                    f"{cls.__name__} | Ошибка запуска вотчер {user_id} из очереди: {e}"
+                )
 
     @classmethod
     async def _create_and_start_from_pending(cls, user_id: int, creds_data: dict):
@@ -145,12 +159,16 @@ class WatcherManager(ABC, Generic[W]):
                 stagger_delay = global_cfg.stagger_delay
                 stagger_jitter = global_cfg.stagger_jitter
             except Exception as e:
-                logger.warning(f"{cls.__name__} | Не удалось загрузить stagger config: {e}")
+                logger.warning(
+                    f"{cls.__name__} | Не удалось загрузить stagger config: {e}"
+                )
 
         # Случайный порядок для равномерного распределения
         random.shuffle(watchers)
 
-        logger.info(f"{cls.__name__} | Staggered resume: {len(watchers)} вотчеров | delay={stagger_delay}s jitter={stagger_jitter}s")
+        logger.info(
+            f"{cls.__name__} | Staggered resume: {len(watchers)} вотчеров | delay={stagger_delay}s jitter={stagger_jitter}s"
+        )
 
         for i, watcher in enumerate(watchers):
             delay = stagger_delay + random.uniform(0, stagger_jitter)
@@ -225,22 +243,40 @@ class WatcherManager(ABC, Generic[W]):
                             message = "Нужно переавторизоваться"
                         else:
                             message = "Неверный логин или пароль"
-                        logger.warning(f"{cls.__name__} | {event.username} | Фатальная ошибка: {message}")
+                        logger.warning(
+                            f"{cls.__name__} | {event.username} | Фатальная ошибка: {message}"
+                        )
                         await cls.notification_service.send_message(
-                            event.user_id,
-                            f" [{event.watcher_type.value}] {message}"
+                            event.user_id, f" [{event.watcher_type.value}] {message}"
                         )
                         await cls.stop_and_delete(event.user_id)
                         async with async_session() as session:
                             if event.watcher_type == WatcherType.BARS:
-                                await UserService(session).set_bars_status_used(event.user_id, False)
+                                await UserService(session).set_bars_status_used(
+                                    event.user_id, False
+                                )
                             elif event.watcher_type == WatcherType.OSEP:
-                                await UserService(session).set_osep_status_used(event.user_id, False)
-                        logger.info(f"{cls.__name__} | {event.username} | Вотчер остановлен, статус сброшен")
+                                await UserService(session).set_osep_status_used(
+                                    event.user_id, False
+                                )
+                        logger.info(
+                            f"{cls.__name__} | {event.username} | Вотчер остановлен, статус сброшен"
+                        )
                     case error:
-                        if isinstance(error, (DataParsingError, ResponseError, RequestVerificationTokenError)):
+                        if isinstance(
+                            error,
+                            (
+                                DataParsingError,
+                                ResponseError,
+                                RequestVerificationTokenError,
+                            ),
+                        ):
                             uid = uuid4().hex
-                            content = error.content.encode(errors="ignore", encoding="utf-8") if isinstance(error.content, str) else error.content
+                            content = (
+                                error.content.encode(errors="ignore", encoding="utf-8")
+                                if isinstance(error.content, str)
+                                else error.content
+                            )
                             att_data = AttachmentData(
                                 id=uid,
                                 content_type="application/html",
@@ -248,12 +284,14 @@ class WatcherManager(ABC, Generic[W]):
                                 size=len(content),
                                 content=content,
                             )
-                            logger.info(f"{cls.__name__} | {event.username} | Контент ошибки отправлен админу ({len(content)} bytes)")
+                            logger.info(
+                                f"{cls.__name__} | {event.username} | Контент ошибки отправлен админу ({len(content)} bytes)"
+                            )
                             for admin in settings.admins:
                                 await cls.notification_service.send_message_with_documents(
                                     admin,
                                     f"Ошибка при обработке запроса: {type(error).__name__} у {event.username} <code>{event.user_id}</code>",
-                                    files=[att_data]
+                                    files=[att_data],
                                 )
                         logger.exception(error)
                         # Не перезапускать, если вотчер на паузе (сервер недоступен)
@@ -278,13 +316,17 @@ class WatcherManager(ABC, Generic[W]):
                                     f"{cls.__name__} | {event.username} | Вотчер не найден для перезапуска"
                                 )
             case _:
-                logger.warning(f"{cls.__name__} Неизвестное событие: {event.event_type}")
+                logger.warning(
+                    f"{cls.__name__} Неизвестное событие: {event.event_type}"
+                )
 
     @classmethod
     async def _send_notification(cls, event: WatcherEvent, header: str):
         """Отправить уведомление с заголовком."""
-        files = event.metadata.get('files', [])
-        logger.info(f"{cls.__name__} | {event.username} | {header} | files={len(files)}")
+        files = event.metadata.get("files", [])
+        logger.info(
+            f"{cls.__name__} | {event.username} | {header} | files={len(files)}"
+        )
         safe_message = html_escape(event.message)
         full_text = f"{header}\n\n{safe_message}"
 
@@ -294,8 +336,7 @@ class WatcherManager(ABC, Generic[W]):
             )
             if not success:
                 await cls.notification_service.send_message(
-                    event.user_id,
-                    f"{full_text}\n\n⚠️ Не удалось отправить вложения"
+                    event.user_id, f"{full_text}\n\n⚠️ Не удалось отправить вложения"
                 )
         else:
             await cls.notification_service.send_message(event.user_id, full_text)
@@ -330,7 +371,9 @@ class WatcherManager(ABC, Generic[W]):
     @classmethod
     async def refresh_all_configs(cls):
         """Обновить конфигурацию у всех работающих вотчеров (после изменения настроек)."""
-        logger.info(f"{cls.__name__} | Обновление конфигурации у {len(cls._get_watchers())} вотчеров")
+        logger.info(
+            f"{cls.__name__} | Обновление конфигурации у {len(cls._get_watchers())} вотчеров"
+        )
         for watcher in cls._get_watchers().values():
             await watcher.refresh_config()
 
@@ -397,7 +440,7 @@ class BarsWatcherManager(WatcherManager):
             service="bars",
             login=creds_data["login"],
             password=creds_data["password"],
-            watcher_type=WatcherType.BARS
+            watcher_type=WatcherType.BARS,
         )
 
         try:
@@ -419,7 +462,9 @@ class BarsWatcherManager(WatcherManager):
                 await UserService(session).set_bars_status_used(user_id, False)
             return
         except ClientError:
-            logger.info(f"{cls.__name__} | Сервер БАРС всё ещё недоступен для {user_id}, возвращаем в очередь")
+            logger.info(
+                f"{cls.__name__} | Сервер БАРС всё ещё недоступен для {user_id}, возвращаем в очередь"
+            )
             cls.add_pending_watcher(user_id, creds_data)
             return
 
@@ -453,13 +498,15 @@ class OsepWatcherManager(WatcherManager):
             service="osep",
             login=creds_data["login"],
             password=creds_data["password"],
-            watcher_type=WatcherType.OSEP
+            watcher_type=WatcherType.OSEP,
         )
 
         try:
             res = await auth.login()
         except ClientError:
-            logger.info(f"{cls.__name__} | Сервер ОСЭП всё ещё недоступен для {user_id}, возвращаем в очередь")
+            logger.info(
+                f"{cls.__name__} | Сервер ОСЭП всё ещё недоступен для {user_id}, возвращаем в очередь"
+            )
             cls.add_pending_watcher(user_id, creds_data)
             return
 
