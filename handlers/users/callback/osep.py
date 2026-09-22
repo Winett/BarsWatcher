@@ -21,6 +21,7 @@ router = Router(name=__name__)
 
 @router.callback_query(F.data == "osep")
 async def osep_command(msg: CallbackQuery, state: FSMContext, session: sessionmaker):
+    await msg.answer()
     user_service = UserService(session)
     used_osep = await user_service.check_osep(msg.from_user.id)
 
@@ -49,7 +50,6 @@ async def osep_command(msg: CallbackQuery, state: FSMContext, session: sessionma
         await msg.message.answer(
             msg_to_send, reply_markup=update_osep_data_keyboard(used_osep)
         )
-    await msg.answer()
     return
 
 
@@ -126,14 +126,38 @@ async def watching_osep_command(
     user_service = UserService(session)
 
     if not OsepMonitor().is_connected:
-        await msg.answer("Сервер ОСЭП в данный момент недоступен. Попробуйте позже.")
+        await msg.answer(
+            "Сервер ОСЭП в данный момент недоступен. Попробуйте позже.", show_alert=True
+        )
         return
 
-    # Останавливаем текущий вотчер перед реавторизацией,
-    # чтобы сессия не шарилась между вотчером и новым auth-объектом
-    if await user_service.check_osep(msg.from_user.id):
-        await OsepWatcherManager.stop_and_delete(msg.from_user.id)
+    # Проверяем, есть ли активный вотчер с живой сессией
+    existing_watcher = OsepWatcherManager.get_watcher_instance(msg.from_user.id)
+    if existing_watcher:
+        # Вотчер есть — проверяем, жива ли сессия через api
+        try:
+            # Пробуем сделать простой запрос для проверки сессии
+            await existing_watcher.api.get_folders()
+            is_auth = True
+        except Exception:
+            is_auth = False
 
+        if is_auth:
+            # Сессия жива — просто включаем уведомления, без реавторизации
+            await user_service.set_osep_status_used(msg.from_user.id, True)
+            await msg.answer("Уведомления о ОСЭПе включены!")
+            await msg.message.edit_text(
+                f'Отслеживание ОСЭП: {"✅"}\n'
+                f"Текущие параметры, по которым отслеживается ОСЭП:\n"
+                f" - Логин: {await user_service.get_osep_login(msg.from_user.id)}",
+                reply_markup=update_osep_data_keyboard(True),
+            )
+            return
+        else:
+            # Сессия протухла — останавливаем current вотчер
+            await OsepWatcherManager.stop_and_delete(msg.from_user.id)
+
+    # Нет вотчера или сессия протухла — полная авторизация
     osep_login = await user_service.get_osep_login(msg.from_user.id)
     osep_password = await user_service.get_osep_password(msg.from_user.id)
 
@@ -169,8 +193,6 @@ async def watching_osep_command(
         f" - Логин: {await user_service.get_osep_login(msg.from_user.id)}",
         reply_markup=update_osep_data_keyboard(True),
     )
-    await msg.answer()
-    return
 
 
 @router.callback_query(F.data == "dont_watching_osep")
@@ -190,5 +212,3 @@ async def watching_osep_command(
         f" - Логин: {await user_service.get_osep_login(msg.from_user.id)}",
         reply_markup=update_osep_data_keyboard(False),
     )
-    await msg.answer()
-    return

@@ -23,6 +23,7 @@ router = Router(name=__name__)
 
 @router.callback_query(F.data == "bars")
 async def bars_command(msg: CallbackQuery, state: FSMContext, session: sessionmaker):
+    await msg.answer()
     user_service = UserService(session)
     used_bars = await user_service.check_bars(msg.from_user.id)
 
@@ -178,14 +179,36 @@ async def watching_bars_command(
     user_service = UserService(session)
 
     if not BarsMonitor().is_connected:
-        await msg.answer("Сервер БАРС в данный момент недоступен. Попробуйте позже.")
+        await msg.answer(
+            "Сервер БАРС в данный момент недоступен. Попробуйте позже.", show_alert=True
+        )
         return
 
-    # Останавливаем текущий вотчер перед реавторизацией,
-    # чтобы сессия не шарилась между вотчером и новым auth-объектом
-    if await user_service.check_bars(msg.from_user.id):
-        await BarsWatcherManager.stop_and_delete(msg.from_user.id)
+    # Проверяем, есть ли активный вотчер с живой сессией
+    existing_watcher = BarsWatcherManager.get_watcher_instance(msg.from_user.id)
+    if existing_watcher:
+        # Вотчер есть — проверяем, жива ли сессия через auth
+        try:
+            is_auth = await existing_watcher.api.auth.is_authenticated()
+        except Exception:
+            is_auth = False
 
+        if is_auth:
+            # Сессия жива — просто включаем уведомления, без реавторизации
+            await user_service.set_bars_status_used(msg.from_user.id, True)
+            await msg.answer("Уведомления о БАРСе включены!")
+            await msg.message.edit_text(
+                f'Отслеживание БАРС: {"✅"}\n'
+                f"Текущие параметры, по которым отслеживается БАРС:\n"
+                f" - Логин: {await user_service.get_bars_login(msg.from_user.id)}",
+                reply_markup=update_bars_data_keyboard(True),
+            )
+            return
+        else:
+            # Сессия протухла — останавливаем current вотчер
+            await BarsWatcherManager.stop_and_delete(msg.from_user.id)
+
+    # Нет вотчера или сессия протухла — полная авторизация
     login = await user_service.get_bars_login(msg.from_user.id)
     password = await user_service.get_bars_password(msg.from_user.id)
 
