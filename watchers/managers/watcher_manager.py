@@ -256,13 +256,27 @@ class WatcherManager(ABC, Generic[W]):
                                     files=[att_data]
                                 )
                         logger.exception(error)
-                        logger.info(f"{cls.__name__} | {event.username} | Перезапуск через 5 сек...")
-                        await asyncio.sleep(5)
-                        try:
-                            await cls.get_watcher_instance(event.user_id).restart()
-                            logger.info(f"{cls.__name__} | {event.username} | Вотчер перезапущен")
-                        except AttributeError:
-                            logger.warning(f"{cls.__name__} | {event.username} | Вотчер не найден для перезапуска")
+                        # Не перезапускать, если вотчер на паузе (сервер недоступен)
+                        watcher = cls.get_watcher_instance(event.user_id)
+                        if watcher and watcher.stats.status == WatcherStatus.PAUSED:
+                            logger.info(
+                                f"{cls.__name__} | {event.username} | "
+                                f"Вотчер на паузе, restart пропущен"
+                            )
+                        else:
+                            logger.info(
+                                f"{cls.__name__} | {event.username} | Перезапуск через 5 сек..."
+                            )
+                            await asyncio.sleep(5)
+                            try:
+                                await watcher.restart()
+                                logger.info(
+                                    f"{cls.__name__} | {event.username} | Вотчер перезапущен"
+                                )
+                            except AttributeError:
+                                logger.warning(
+                                    f"{cls.__name__} | {event.username} | Вотчер не найден для перезапуска"
+                                )
             case _:
                 logger.warning(f"{cls.__name__} Неизвестное событие: {event.event_type}")
 
