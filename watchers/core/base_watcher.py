@@ -263,12 +263,20 @@ class BaseWatcher(ABC):
             self._task = None
 
     async def pause(self):
-        """Пауза вотчера"""
+        """Пауза вотчера — отмена task с сохранением ресурсов."""
         async with self._lifecycle_lock:
             logger.info(f"{self._logger_template} Пауза")
             self._is_pausing = True
             self._is_running = False
             self._stats.status = WatcherStatus.PAUSED
+            # Отменяем task, чтобы он гарантированно остановился
+            if self._task and not self._task.done():
+                self._task.cancel()
+                try:
+                    await self._task
+                except asyncio.CancelledError:
+                    pass
+            self._task = None
 
     async def resume(self):
         """Возобновление работы"""
