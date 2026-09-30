@@ -1,0 +1,375 @@
+
+
+<script type="text/javascript">
+    function ajaxS2_ddl_FilterInstitute() {
+        var select2 = $('#ddl_FilterInstitute').select2({
+            language: 'ru'
+            , width: 'style'
+            , theme: 'bootstrap-5'
+            , selectionCssClass: "select2--small"
+            , dropdownCssClass: "select2--small"
+            , placeholder: 'Институт'
+            , allowClear: true
+            , minimumInputLength: 2
+            , ajax: {
+                url: '/bars_web/SG/JSON/JSON_AE_inst'
+                , data: function (params) {
+                    return {
+                        'searchText': clearBadInput(params.term)
+                    };
+                }
+                , dataType: 'json'
+                , cache: false
+                , processResults: function (data) {
+                    var results = $.map(data,
+                        function (obj) {
+                            return { id: obj.id, text: obj.disabled ? 'Неактивно: ' + obj.text : obj.text };
+                        });
+
+                    return {
+                        results: S2_processResults_Message(results, 30)
+                    };
+                }
+            }
+            , templateResult: S2_templateResult_Message
+        });
+        return select2;
+    }
+
+    function getQuery__PartialListStudyGroup()
+    {
+        var table = document.getElementById('tbl__PartialListStudyGroup');
+        var query = { };
+        query.ID = table.getAttribute('data-q-id');
+        query.State = table.getAttribute('data-q-state');
+
+        if (query.State !== "1")
+        {
+            query.SortOrder = table.getAttribute('data-q-sort-order');
+            query.Page = table.getAttribute('data-q-page');
+            query.PageSize = table.getAttribute('data-q-page-size');
+            query.SearchText = ENtoRU($('#studyGroup__Search').val().trim());
+
+            query.FilterDisplayName = ENtoRU($('#tb_FilterDisplayName').val().trim());
+            query.FilterFormationYear = $('#tb_FilterFormationYear').val().trim();
+            query.FilterCourse = $('#tb_FilterCourse').val().trim();
+
+            query.FilterSubfacultyName = ENtoRU($('#tb_FilterSubfacultyName').val().trim());
+            query.FilterAE_OrganizationName = ENtoRU($('#tb_FilterAE_OrganizationName').val().trim());
+
+            query.FilterEmail = $('#tb_FilterEmail').val().trim();
+
+            query.FilterDegree = {};
+            var ddl_FilterDegree = $("#ddl_FilterDegree");
+            if (ddl_FilterDegree.length !== 0) {
+                query.FilterDegree.Value = ddl_FilterDegree.find("option:selected").val();
+            }
+
+            query.FilterTrainingForm = {};
+            var ddl_FilterTrainingForm = $("#ddl_FilterTrainingForm");
+            if (ddl_FilterTrainingForm.length !== 0) {
+                query.FilterTrainingForm.Value = ddl_FilterTrainingForm.find("option:selected").val();
+            }
+
+            query.FilterInstitute = {};
+            var ddl_FilterInstitute = $("#ddl_FilterInstitute");
+            if (ddl_FilterInstitute.length !== 0) {
+                query.FilterInstitute.Value = ddl_FilterInstitute.find("option:selected").val();
+            }
+        }
+
+        return JSON.stringify(query);
+    };
+
+    $(document).ready(function () {
+        var ddl_FilterInstitute = ajaxS2_ddl_FilterInstitute();
+        var ddl_FilterDegree = S2_simpleSmall("#ddl_FilterDegree", -1);
+        var ddl_FilterTrainingForm = S2_simpleSmall("#ddl_FilterTrainingForm", -1);
+
+        $('#tb_FilterDisplayName,#tb_FilterFormationYear,#tb_FilterCourse,#tb_FilterSubfacultyName,#tb_FilterAE_OrganizationName,#tb_FilterEmail').keypress(function(e) {
+            if (e.which !== 13)
+                return;
+
+            filter__PartialListStudyGroup();
+        });
+
+        ddl_FilterInstitute.on('select2:select', function (e) {
+            filter__PartialListStudyGroup();
+        });
+
+        ddl_FilterInstitute.on('select2:clear', function (e) {
+            filter__PartialListStudyGroup();
+        });
+
+        ddl_FilterDegree.on('select2:select', function (e) {
+            filter__PartialListStudyGroup();
+        });
+
+        ddl_FilterTrainingForm.on('select2:select', function (e) {
+            filter__PartialListStudyGroup();
+        });
+
+        S2_SearchFieldFocusForJQSelector('*');
+    });
+</script>
+
+<div class="border bg-light">
+<div class="row p-1">
+    <div class="col-0 col-md-4 col-lg-4 pt-1">
+        <span class="h6 fw-bold d-none d-md-inline">Список учебных групп</span>
+    </div>
+
+    <div class="col-12 col-md-8 col-lg-8">
+        <div class="input-group">
+            <input class="form-control" placeholder="Поиск..." type="text" id="studyGroup__Search" value="">
+
+            <button id="studyGroup__Filter" role="button" class="btn btn-light border border-secondary">
+                <i class="fa fa-search"></i>
+            </button>
+            <button id="studyGroup__FilterClear" role="button" class="btn btn-light border border-secondary">
+                <i class="fa fa-remove"></i>
+            </button>
+        </div>
+    </div>
+</div>
+    <div class="table-responsive">
+        <table id="tbl__PartialListStudyGroup"
+               data-q-href="/bars_web/SG/StudyGroup/_PartialListStudyGroup"
+               data-q-sort-order="sg_Course,sg_DisplayName"
+               data-q-page="1"
+               data-q-page-size="10"
+               class="table table-sm table-striped table-bordered table-hover mb-0">
+            <thead>
+                <tr>
+                    <th class="w-10">
+                        <a href="#" data-col-name="sg_DisplayName" class="text-dark">Наименование<i class="fa fa-sort-down ms-1"></i></a>
+                    </th>
+
+                    <th class="w-10">
+                        <a href="#" data-col-name="sg_FormationYear" class="text-dark">Год формирования<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+
+                    <th class="w-5">
+                        <a href="#" data-col-name="sg_Course" class="text-dark">Курс<i class="fa fa-sort-down ms-1"></i></a>
+                    </th>
+
+                    <th class="w-10">
+                        <a href="#" data-col-name="deg_Name" class="text-dark">Уровень образования<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+
+                    <th class="w-10">
+                        <a href="#" data-col-name="tf_Name" class="text-dark">Форма обучения<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+
+                    <th class="w-5">
+                        <a href="#" data-col-name="subfac_ShortName" class="text-dark">Кафедра<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+
+                    <th class="w-5">
+                        <a href="#" data-col-name="inst_ShortName_Organization" class="text-dark">Институт<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+
+                    <th class="w-5">
+                        <a href="#" data-col-name="ae_org_ShortName" class="text-dark">Организация<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+
+                    <th class="w-20">
+                        Почта
+                    </th>
+
+                    <th class="w-20">
+                        Староста
+                    </th>
+                    <th class="w-1">
+
+                    </th>
+                </tr>
+
+                <tr>
+                    <th>
+                        <input id="tb_FilterDisplayName" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+
+                    <th>
+                        <input id="tb_FilterFormationYear" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+
+                    <th>
+                        <input id="tb_FilterCourse" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+
+                    <th>
+                        <select class="form-control" id="ddl_FilterDegree" name="ddl_FilterDegree"><option selected="selected" value="*">все</option>
+<option value="1">бакалавриат</option>
+<option value="2">магистратура</option>
+<option value="3">специалитет</option>
+<option value="5">СПО</option>
+<option value="6">аспирантура</option>
+<option value="4">Неактивно: прикладной бакалавриат</option>
+</select>
+                    </th>
+
+                    <th>
+                        <select class="form-control" id="ddl_FilterTrainingForm" name="ddl_FilterTrainingForm"><option selected="selected" value="*">все</option>
+<option value="1">очная</option>
+<option value="2">очно-заочная</option>
+<option value="3">заочная</option>
+<option value="4">не задано</option>
+</select>
+                    </th>
+
+                    <th>
+                        <input id="tb_FilterSubfacultyName" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+
+                    <th>
+                        <select id="ddl_FilterInstitute" class="form-control form-control-sm">
+                        </select>
+                    </th>
+
+                    <th>
+                        <input id="tb_FilterAE_OrganizationName" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+
+                    <th>
+                        <input id="tb_FilterEmail" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+
+                    <th>
+                    </th>
+
+                    <th>
+                    </th>
+                </tr>
+            </thead>
+
+                <tbody>
+                        <tr>
+                            <td>
+                                <a href="/bars_web/SG/StudyGroup/EditStudyGroup?sgID=ce991316-11df-ed11-80d9-005056be401c">
+                                    Б-12-21
+                                </a>
+                            </td>
+
+                            <td>2023</td>
+
+                            <td>4</td>
+
+                            <td>бакалавриат</td>
+
+                            <td>очная</td>
+
+                            <td>МКМ</td>
+
+                            <td>ИВТИ</td>
+
+                            <td>МЭИ, г. Москва</td>
+
+                            <td>
+                                    <a href="mailto:B-12-21-all@example.com" title="Написать на почту">
+                                        B-12-21-all@example.com
+                                        <i class="fa fa-envelope" style="color: gray"></i>
+                                    </a>
+                                    <a title="Скопировать почту" onclick="toClipboard('B-12-21-all@example.com')" style="cursor: pointer">
+                                        <i class="fa fa-clone"></i>
+                                    </a>
+                            </td>
+
+                            <td>
+                                    <a href="mailto:PetrovaMA@example.com" title="Написать на почту">
+                                        Петрова Мария Петровна
+                                        <i class="fa fa-envelope" style="color: gray"></i>
+                                    </a>
+                                    <a title="Скопировать почту" onclick="toClipboard('PetrovaMA@example.com')" style="cursor: pointer">
+                                        <i class="fa fa-clone"></i>
+                                    </a>
+                            </td>
+
+                            <td>
+                                <div class="btn-group">
+                                    <a title="Просмотр"
+                                       class="btn btn-light border border-secondary"
+                                       href="/bars_web/SG/StudyGroup/EditStudyGroup?sgID=ce991316-11df-ed11-80d9-005056be401c">
+                                        <i class="fa fa-search"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                </tbody>
+        </table>
+    </div>
+</div>
+<div id="studyGroup__Pager" class="d-flex">
+    <div class='pager-size'><span>Отображены 1-1 записи из 1</span><br/><span>Отображать <select><option value='10' selected>10</option><option value='25'>25</option><option value='50'>50</option><option value='100'>100</option><option value='500'>500</option></select> записей</span></div>
+    
+</div>
+
+<script type="text/javascript">
+    function filter__PartialListStudyGroup() {
+                var table = document.getElementById('tbl__PartialListStudyGroup');
+                table.setAttribute('data-q-page', '');
+                loadTableByQueryAsyncV2(table, 'div-StudyGroup', getQuery__PartialListStudyGroup, this);
+                return false;
+            }
+
+            function filter_clear__PartialListStudyGroup() {
+                var table = document.getElementById('tbl__PartialListStudyGroup');
+                table.setAttribute('data-q-state', '1');
+                loadTableByQueryAsyncV2(table, 'div-StudyGroup', getQuery__PartialListStudyGroup, this);
+                return false;
+            }
+
+            $(function()
+            {
+                $('#studyGroup__Pager a').on('click', function() {
+                    var table = document.getElementById('tbl__PartialListStudyGroup');
+                    var parts = this.href.split('/')
+                    var page = 0;
+                    if(parts.length > 0) {
+                        page = parts[parts.length - 1];
+                    }
+                    table.setAttribute('data-q-page', page);
+                    loadTableByQueryAsyncV2(table, 'div-StudyGroup', getQuery__PartialListStudyGroup, this);
+                    return false;
+                });
+
+                $('#studyGroup__Pager select:first').change(function() {
+                    var table = document.getElementById('tbl__PartialListStudyGroup');
+                    table.setAttribute('data-q-page-size', $(this).val());
+                    table.setAttribute('data-q-page', 1);
+                    loadTableByQueryAsyncV2(table, 'div-StudyGroup', getQuery__PartialListStudyGroup, this);
+                });
+
+                $('#studyGroup__Filter').on('click', function() {
+                    filter__PartialListStudyGroup();
+                });
+
+                $('#studyGroup__FilterClear').on('click', function() {
+                    filter_clear__PartialListStudyGroup();
+                });
+
+                $('#studyGroup__Search').keypress(function(e) {
+                    if (e.which === 13)
+                    {
+                        filter__PartialListStudyGroup();
+                    }
+                });
+
+                $('#tbl__PartialListStudyGroup thead tr th a[data-col-name]').on('click', function(e) {
+                    var table = document.getElementById('tbl__PartialListStudyGroup');
+                    if (!e.shiftKey)
+                    {
+                        table.setAttribute('data-q-sort-order', '');
+                    }
+                    processSortOrder(table, this);
+                    loadTableByQueryAsyncV2(table, 'div-StudyGroup', getQuery__PartialListStudyGroup, this);
+                    return false;
+                });
+            });
+</script>
+
+<script src="/bars_web/bundles/icc_modalform_bind?v=g0oPAXAnWizeJBr8Rv_jwJPuCMcJBIapg5s7BaKe5Dg1"></script>
+
+
+
+

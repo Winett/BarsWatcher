@@ -1,0 +1,176 @@
+
+
+<div class="border bg-light">
+<div class="row p-1">
+    <div class="col-0 col-md-4 col-lg-4 pt-1">
+        <span class="h6 fw-bold d-none d-md-inline">Ответственные за учебный журнал</span>
+    </div>
+
+    <div class="col-12 col-md-8 col-lg-8">
+        <div class="input-group">
+            <input class="form-control" placeholder="Поиск..." type="text" id="leaders__Search" value="">
+
+            <button id="leaders__Filter" role="button" class="btn btn-light border border-secondary">
+                <i class="fa fa-search"></i>
+            </button>
+            <button id="leaders__FilterClear" role="button" class="btn btn-light border border-secondary">
+                <i class="fa fa-remove"></i>
+            </button>
+        </div>
+    </div>
+</div>
+    <div class="table-responsive">
+        <table id="tbl__PartialListStudyGroup_Leaders"
+               data-q-href="/bars_web/SG/StudyGroupLeader/_PartialListStudyGroup_Leaders?sgID=ce991316-11df-ed11-80d9-005056be401c"
+               data-q-page="1"
+               class="table table-sm table-striped table-bordered table-hover mb-0">
+            <thead>
+                <tr>
+                    <th class="w-20">
+                        Логин
+                    </th>
+                    <th class="w-20">
+                        Фамилия
+                    </th>
+                    <th class="w-20">
+                        Имя
+                    </th>
+                    <th class="w-20">
+                        Отчество
+                    </th>
+                    <th class="w-20">
+                        Почта
+                    </th>
+                </tr>
+            </thead>
+
+                <tbody>
+                        <tr>
+                            <td>public\MorozovVA</td>
+                            <td>Антипов</td>
+                            <td>Вадим</td>
+                            <td>Александрович</td>
+
+                            <td>
+                                MorozovVA@example.com
+
+                                <a href="mailto:MorozovVA@example.com" title="Написать на почту">
+                                    <i class="fa fa-envelope" style="color: gray"></i>
+                                </a>
+
+                                <a title="Скопировать почту" onclick="toClipboard('MorozovVA@example.com')" style="cursor: pointer">
+                                    <i class="fa fa-clone"></i>
+                                </a>
+                            </td>
+
+                        </tr>
+                        <tr>
+                            <td>public\PetrovaMA</td>
+                            <td>Герасимова</td>
+                            <td>Екатерина</td>
+                            <td>Андреевна</td>
+
+                            <td>
+                                PetrovaMA@example.com
+
+                                <a href="mailto:PetrovaMA@example.com" title="Написать на почту">
+                                    <i class="fa fa-envelope" style="color: gray"></i>
+                                </a>
+
+                                <a title="Скопировать почту" onclick="toClipboard('PetrovaMA@example.com')" style="cursor: pointer">
+                                    <i class="fa fa-clone"></i>
+                                </a>
+                            </td>
+
+                        </tr>
+                </tbody>
+        </table>
+    </div>
+</div>
+<div id="leaders__Pager" class="d-flex">
+    
+</div>
+
+<script type="text/javascript">
+    function getQuery__PartialListStudyGroup_Leaders()
+            {
+                var table = document.getElementById('tbl__PartialListStudyGroup_Leaders');
+                var query = { };
+                query.ID = table.getAttribute('data-q-id');
+                query.State = table.getAttribute('data-q-state');
+
+                if (query.State != 1)
+                {
+                    query.SortOrder = table.getAttribute('data-q-sort-order');
+                    query.Page = table.getAttribute('data-q-page');
+                    query.PageSize = table.getAttribute('data-q-page-size');
+                    query.SearchText = ENtoRU(($('#leaders__Search').val() || '').trim());
+                }
+
+                return JSON.stringify(query);
+            };
+    function filter__PartialListStudyGroup_Leaders() {
+                var table = document.getElementById('tbl__PartialListStudyGroup_Leaders');
+                table.setAttribute('data-q-page', '');
+                loadTableByQueryAsyncV2(table, 'div-StudyGroup_Leaders', getQuery__PartialListStudyGroup_Leaders, this);
+                return false;
+            }
+
+            function filter_clear__PartialListStudyGroup_Leaders() {
+                var table = document.getElementById('tbl__PartialListStudyGroup_Leaders');
+                table.setAttribute('data-q-state', '1');
+                loadTableByQueryAsyncV2(table, 'div-StudyGroup_Leaders', getQuery__PartialListStudyGroup_Leaders, this);
+                return false;
+            }
+
+            $(function()
+            {
+                $('#leaders__Pager a').on('click', function() {
+                    var table = document.getElementById('tbl__PartialListStudyGroup_Leaders');
+                    var parts = this.href.split('/')
+                    var page = 0;
+                    if(parts.length > 0) {
+                        page = parts[parts.length - 1];
+                    }
+                    table.setAttribute('data-q-page', page);
+                    loadTableByQueryAsyncV2(table, 'div-StudyGroup_Leaders', getQuery__PartialListStudyGroup_Leaders, this);
+                    return false;
+                });
+
+                $('#leaders__Pager select:first').change(function() {
+                    var table = document.getElementById('tbl__PartialListStudyGroup_Leaders');
+                    table.setAttribute('data-q-page-size', $(this).val());
+                    table.setAttribute('data-q-page', 1);
+                    loadTableByQueryAsyncV2(table, 'div-StudyGroup_Leaders', getQuery__PartialListStudyGroup_Leaders, this);
+                });
+
+                $('#leaders__Filter').on('click', function() {
+                    filter__PartialListStudyGroup_Leaders();
+                });
+
+                $('#leaders__FilterClear').on('click', function() {
+                    filter_clear__PartialListStudyGroup_Leaders();
+                });
+
+                $('#leaders__Search').keypress(function(e) {
+                    if (e.which === 13)
+                    {
+                        filter__PartialListStudyGroup_Leaders();
+                    }
+                });
+
+                $('#tbl__PartialListStudyGroup_Leaders thead tr th a[data-col-name]').on('click', function(e) {
+                    var table = document.getElementById('tbl__PartialListStudyGroup_Leaders');
+                    if (!e.shiftKey)
+                    {
+                        table.setAttribute('data-q-sort-order', '');
+                    }
+                    processSortOrder(table, this);
+                    loadTableByQueryAsyncV2(table, 'div-StudyGroup_Leaders', getQuery__PartialListStudyGroup_Leaders, this);
+                    return false;
+                });
+            });
+</script>
+
+<script src="/bars_web/bundles/icc_modalform_bind?v=g0oPAXAnWizeJBr8Rv_jwJPuCMcJBIapg5s7BaKe5Dg1"></script>
+

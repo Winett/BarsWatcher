@@ -1,0 +1,340 @@
+
+
+<style>
+    .ddl_LessonStudent_FilterSemester {
+        max-width: 170px !important;
+    }
+
+    span.ls-header {
+        font-weight: bold;
+        font-style: italic;
+        font-size: 12px;
+        text-decoration: underline;
+    }
+
+    span.ls-item {
+        font-weight: bold;
+        font-style: italic;
+        font-size: 12px
+    }
+</style>
+
+<script>
+    function exportToExcel(url, mode)
+    {
+        url += "&mode=" + mode;
+        document.location = url;
+    };
+
+    function editLessonStudentMany(tableID, url) {
+        var checkedIDs = getCheckedTRsData(tableID, 'ls-id');
+        if (checkedIDs.length === 0) {
+            notifyError("Выберите посещения");
+            return;
+        }
+
+        var srcElement = $(this);
+        var data = {
+            'checkedIDs': checkedIDs.join()
+        };
+        var bindData = { func: callbackShowModal, target: 'div-Student__Lesson' };
+        ajaxPostLoadModal(srcElement, url, data, bindData);
+    }
+
+    function checkUncheckAll(e) {
+        $("#tbl__PartialListStudent__Lesson__Student tr[data-ls-id] td input[type='checkbox']").prop("checked", e.checked);
+    }
+
+    function getQuery__PartialListStudent__Lesson__Student(clickedElem) {
+        var table = document.getElementById('tbl__PartialListStudent__Lesson__Student');
+        var query = {};
+        query.ID = table.getAttribute('data-q-id');
+        query.State = table.getAttribute('data-q-state');
+
+        if (query.State !== "1") {
+            query.SortOrder = table.getAttribute('data-q-sort-order');
+            query.Page = table.getAttribute('data-q-page');
+            query.PageSize = table.getAttribute('data-q-page-size');
+            query.SearchText = ENtoRU($('#st_les__Search').val().trim());
+
+            query.FilterStartDate = $('#dp_FilterStartDate').val().trim();
+            query.FilterEndDate = $('#dp_FilterEndDate').val().trim();
+
+            query.FilterSemester = {};
+            var ddl_LessonStudent_FilterSemester = $("#ddl_LessonStudent_FilterSemester");
+            if (ddl_LessonStudent_FilterSemester.length !== 0) {
+                query.FilterSemester.Value = ddl_LessonStudent_FilterSemester.find("option:selected").val();
+            }
+
+            query.FilterLessonSkipType = {};
+            var ddl_FilterLessonSkipType = $("#ddl_FilterLessonSkipType");
+            if (ddl_FilterLessonSkipType.length !== 0) {
+                query.FilterLessonSkipType.Value = ddl_FilterLessonSkipType.find("option:selected").val();
+            }
+
+            query.FilterLessonSkipReason = {};
+            var ddl_FilterLessonSkipReason = $("#ddl_FilterLessonSkipReason");
+            if (ddl_FilterLessonSkipReason.length !== 0) {
+                query.FilterLessonSkipReason.Value = ddl_FilterLessonSkipReason.find("option:selected").val();
+            }
+        }
+
+        return JSON.stringify(query);
+    }
+
+    $(document).ready(function () {
+        $('#ddl_LessonStudent_FilterSemester').selectpicker({ styleBase: 'btn btn-light border border-secondary rounded-0' });
+
+        S2_simpleModal("#ddl_FilterLessonSkipType", -1, false, '', '#divListFilters');
+        S2_simpleModal("#ddl_FilterLessonSkipReason", -1, false, '', '#divListFilters');
+
+        $('#dp_FilterStartDate,#dp_FilterEndDate').datepicker({
+            language: "ru"
+            , format: "dd.mm.yyyy"
+            , autoclose: true
+            , todayBtn: "linked"
+            , clearBtn: true
+            , daysOfWeekHighlighted: "0,6"
+        });
+
+        $('#divListFilters').on("click.bs.dropdown", function (e) {
+            return false;
+        });
+    });
+
+</script>
+
+<div class="border bg-light">
+    <div class="row p-1">
+        <div class="col-0 col-md-2 col-lg-4 pt-1">
+            <span class="h6 fw-bold d-none d-md-inline">Посещение занятий</span>
+        </div>
+
+        <div class="col-12 col-md-10 col-lg-8">
+            <div class="input-group">
+                <input class="form-control" placeholder="Поиск..." type="text" id="st_les__Search" value="">
+
+                <select class="form-control ddl_LessonStudent_FilterSemester" id="ddl_LessonStudent_FilterSemester" name="ddl_LessonStudent_FilterSemester"><option value="*">все семестры</option>
+<option value="28">2026/2027, Осень</option>
+<option value="27">2025/2026, Весна</option>
+<option value="26">2025/2026, Осень</option>
+<option selected="selected" value="25">2024/2025, Весна</option>
+<option value="24">2024/2025, Осень</option>
+<option value="23">2023/2024, Весна</option>
+<option value="22">2023/2024, Осень</option>
+<option value="21">2022/2023, Весна</option>
+<option value="20">2022/2023, Осень</option>
+<option value="19">2021/2022, Весна</option>
+<option value="18">2021/2022, Осень</option>
+<option value="17">2020/2021, Весна</option>
+<option value="16">2020/2021, Осень</option>
+<option value="15">2019/2020, Весна</option>
+<option value="14">2019/2020, Осень</option>
+<option value="12">2018/2019, Весна</option>
+<option value="11">2018/2019, Осень</option>
+<option value="9">2017/2018, Весна</option>
+<option value="7">2017/2018, Осень</option>
+<option value="6">2016/2017, Весна</option>
+<option value="5">2016/2017, Осень</option>
+<option value="4">2015/2016, Весна</option>
+<option value="3">2015/2016, Осень</option>
+<option value="2">2014/2015, Весна</option>
+<option value="1">2014/2015, Осень</option>
+</select>
+
+                <button type="button" class="btn btn-light border border-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button>
+                <div class="dropdown-menu dropdown-menu-end w-80 p-2" id="divListFilters">
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label text-lg-end">За период с</label>
+                        <div class="col-sm-9">
+                            <div class="input-group input-daterange">
+                                <input id="dp_FilterStartDate" type="text" class="form-control min-max-width-100px" value="">
+                                <div class="input-group-addon col-form-label px-2">по</div>
+                                <input id="dp_FilterEndDate" type="text" class="form-control min-max-width-100px" value="">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label text-lg-end">Пропуск/посещение</label>
+                        <div class="col-sm-9">
+                            <select class="form-control" id="ddl_FilterLessonSkipType" name="ddl_FilterLessonSkipType"><option value="*">все</option>
+<option selected="selected" value="1">занятие пропущено</option>
+<option value="2">занятие посещено</option>
+</select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label text-lg-end">Причина пропуска</label>
+                        <div class="col-sm-9">
+                            <select class="form-control" id="ddl_FilterLessonSkipReason" name="ddl_FilterLessonSkipReason"><option selected="selected" value="*">все</option>
+<option value="1">без уважительной причины</option>
+<option value="2">по уважительной причине</option>
+</select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-lg-12">
+                            <button type="button" class="btn btn-light border border-secondary float-end mx-1" onclick="filter_clear__PartialListStudent__Lesson__Student()">
+                                <i class="fa fa-remove"></i>
+                                Очистить
+                            </button>
+
+                            <button type="button" class="btn btn-light border border-secondary float-end mx-1" onclick="filter__PartialListStudent__Lesson__Student()">
+                                <i class="fa fa-search"></i>
+                                Применить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="st_les__Filter" role="button" class="btn btn-light border border-secondary">
+                    <i class="fa fa-search"></i>
+                </button>
+                <button id="st_les__FilterClear" role="button" class="btn btn-light border border-secondary">
+                    <i class="fa fa-remove"></i>
+                </button>
+
+                <button type="button" class="btn btn-light border border-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                    <span class="d-none d-md-inline">Действия</span>
+                    <span class="caret"></span>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end">
+
+                    <a class="dropdown-item" style="cursor: pointer" onclick="exportToExcel('/bars_web/WebDocGenerator/Lesson__StudentSkipExportToExcel?stID=1f061364-9447-ee11-80da-005056be401c', '1')">Excel, пропуски</a>
+                    <a class="dropdown-item" style="cursor: pointer" onclick="exportToExcel('/bars_web/WebDocGenerator/Lesson__StudentSkipExportToExcel?stID=1f061364-9447-ee11-80da-005056be401c', '')">Excel, все записи</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table id="tbl__PartialListStudent__Lesson__Student"
+               data-q-id="1f061364-9447-ee11-80da-005056be401c"
+               data-q-href="/bars_web/ST_Study/Lesson__Student/_PartialListStudent__Lesson__Student?studentID=1f061364-9447-ee11-80da-005056be401c"
+               data-q-sort-order="CustomSort1 desc"
+               data-q-page="1"
+               data-q-page-size="10"
+               class="table table-sm table-striped table-bordered table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>
+                        <label>
+                            <input type="checkbox" class="form-check-input" onchange="checkUncheckAll(this)" />
+                        </label>
+
+                        <a href="#" data-col-name="CustomSort1" class="text-dark">
+                            Занятие
+                            <i class="fa fa-sort-up ms-1"></i>
+                        </a>
+                    </th>
+
+                    <th class="w-1">
+                    </th>
+                </tr>
+            </thead>
+
+                <tbody>
+                        <tr data-ls-id="3182380">
+                            <td>
+                                    <label style="font-weight: normal">
+                                        <input type="checkbox" class="form-check-input" />
+
+                                        <a href="/bars_web/SG/AttendanceSheet/EditAttendanceSheet?asID=81576#Lessons" target="_blank">
+                                            05.03.25, 3 пара (13:45-15:20), лекция (Орлова О.А.), Алгебра (зачёт с оценкой), Б-12-21
+                                        </a>
+                                    </label>
+
+                                        <span class="badge bg-danger" style="font-size: 12px;">пропуск</span>
+
+                                <br />
+                                <span class="ls-header">Запись занятия создана:</span>
+                                <span class="ls-item"> 12.02.2025 13:39:11 Белова А.А.</span>
+                                <br />
+                                <span class="ls-header">Последнее изменение:</span>
+                                <span class="ls-item"> 09.03.2025 14:53:49 Орлова О.А.</span>
+                            </td>
+
+                            <td>
+                                <div class="btn-group">
+
+                                </div>
+                            </td>
+                        </tr>
+                </tbody>
+        </table>
+    </div>
+</div>
+<div id="st_les__Pager" class="d-flex">
+    <div class='pager-size'><span>Отображены 1-1 записи из 1</span><br/><span>Отображать <select><option value='10' selected>10</option><option value='25'>25</option><option value='50'>50</option><option value='100'>100</option><option value='500'>500</option></select> записей</span></div>
+
+</div>
+
+<script type="text/javascript">
+    function filter__PartialListStudent__Lesson__Student() {
+                var table = document.getElementById('tbl__PartialListStudent__Lesson__Student');
+                table.setAttribute('data-q-page', '');
+                loadTableByQueryAsyncV2(table, 'div-Student__Lesson', getQuery__PartialListStudent__Lesson__Student, this);
+                return false;
+            }
+
+            function filter_clear__PartialListStudent__Lesson__Student() {
+                var table = document.getElementById('tbl__PartialListStudent__Lesson__Student');
+                table.setAttribute('data-q-state', '1');
+                loadTableByQueryAsyncV2(table, 'div-Student__Lesson', getQuery__PartialListStudent__Lesson__Student, this);
+                return false;
+            }
+
+            $(function()
+            {
+                $('#st_les__Pager a').on('click', function() {
+                    var table = document.getElementById('tbl__PartialListStudent__Lesson__Student');
+                    var parts = this.href.split('/')
+                    var page = 0;
+                    if(parts.length > 0) {
+                        page = parts[parts.length - 1];
+                    }
+                    table.setAttribute('data-q-page', page);
+                    loadTableByQueryAsyncV2(table, 'div-Student__Lesson', getQuery__PartialListStudent__Lesson__Student, this);
+                    return false;
+                });
+
+                $('#st_les__Pager select:first').change(function() {
+                    var table = document.getElementById('tbl__PartialListStudent__Lesson__Student');
+                    table.setAttribute('data-q-page-size', $(this).val());
+                    table.setAttribute('data-q-page', 1);
+                    loadTableByQueryAsyncV2(table, 'div-Student__Lesson', getQuery__PartialListStudent__Lesson__Student, this);
+                });
+
+                $('#st_les__Filter').on('click', function() {
+                    filter__PartialListStudent__Lesson__Student();
+                });
+
+                $('#st_les__FilterClear').on('click', function() {
+                    filter_clear__PartialListStudent__Lesson__Student();
+                });
+
+                $('#st_les__Search').keypress(function(e) {
+                    if (e.which === 13)
+                    {
+                        filter__PartialListStudent__Lesson__Student();
+                    }
+                });
+
+                $('#tbl__PartialListStudent__Lesson__Student thead tr th a[data-col-name]').on('click', function(e) {
+                    var table = document.getElementById('tbl__PartialListStudent__Lesson__Student');
+                    if (!e.shiftKey)
+                    {
+                        table.setAttribute('data-q-sort-order', '');
+                    }
+                    processSortOrder(table, this);
+                    loadTableByQueryAsyncV2(table, 'div-Student__Lesson', getQuery__PartialListStudent__Lesson__Student, this);
+                    return false;
+                });
+            });
+</script>
+
+<script src="/bars_web/bundles/icc_modalform_bind?v=g0oPAXAnWizeJBr8Rv_jwJPuCMcJBIapg5s7BaKe5Dg1"></script>
+

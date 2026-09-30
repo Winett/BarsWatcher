@@ -1,0 +1,547 @@
+<script>
+    function ajaxS2_ddlReciever() {
+        var select2 = $('#ddlReciever').select2({
+            language: 'ru'
+            , width: 'style'
+            , theme: 'bootstrap-5'
+            , selectionCssClass: "select2--small"
+            , dropdownCssClass: "select2--small"
+            , allowClear: true
+            , closeOnSelect: true
+            , minimumInputLength: 2
+            , ajax: {
+                url: '/bars_web/Open/RUZ/JSON_Reciever'
+                , data: function(params) {
+                    return {
+                        'searchText': clearBadInput(params.term)
+                        , 'type': getReceiverType()
+                    };
+                }
+                , dataType: 'json'
+                , cache: false
+                , processResults: function(data) {
+                    var results = $.map(data,
+                        function(obj) {
+                            return { id: obj.id, text: obj.disabled ? 'Неактивно: ' + obj.text : obj.text };
+                        });
+
+                    return {
+                        results: S2_processResults_Message(results, 30)
+                    };
+
+                }
+            }
+            , templateResult: S2_templateResult_Message
+        });
+
+        return select2;
+    }
+
+    function getReceiverType() {
+        var rt = '3';
+        var checkedImage = $("#divReceiverType").find("i.fa-check");
+        if (checkedImage.length > 0)
+            rt = checkedImage[0].parentNode.getAttribute('data-receivertype');
+        return rt;
+    }
+
+    function refresh(sd, ed, st) {
+        sd = sd.format("DD.MM.yyyy");
+        ed = ed.format("DD.MM.yyyy");
+        var name = $('#ddlReciever').val();
+        if (!name) {
+            name = '';
+        }
+
+        var rt = getReceiverType();
+
+        var href = '/bars_web/Open/RUZ/_PartialTimetable';
+        href += '?rt=' + rt + '&name=' + name + '&sd=' + sd + '&ed=' + ed + '&st=' + st;
+        href = encodeURI(href);
+        showIndicator();
+        $("#div-Timetable").load(href, function() {
+            hideIndicator();
+        });
+    }
+
+    function toWeek(shift) {
+        var startDateValue = new Date();
+        if (shift !== 0) {
+            startDateValue = $('#startDate').datepicker('getDate');
+        }
+
+        var sd = moment(startDateValue).startOf('week').add(1 + (7 * shift), 'd');
+        var ed = moment(startDateValue).endOf('week').add(1 + (7 * shift), 'd');
+        refresh(sd, ed, '2');
+    }
+
+    function toCustomDate(st) {
+        var startDate = $('#startDate');
+        var startDateValue = startDate.datepicker('getDate');
+        var sd = moment(startDateValue);
+
+        var ed;
+        var endDate = $('#endDate');
+        if (endDate.length === 0) {
+            ed = moment(startDateValue).endOf('week').add(1, 'd');
+        } else {
+            var endDateValue = endDate.datepicker('getDate');
+            ed = moment(endDateValue);
+        }
+
+        if (st === 1) {
+            sd = moment(startDateValue).startOf('week').add(1, 'd');
+            ed = moment(startDateValue).endOf('week').add(1, 'd');
+        }
+
+        refresh(sd, ed, st);
+    }
+
+    $(document).ready(function () {
+        $('#startDate,#endDate').datepicker({
+            language: "ru",
+            format: "dd.mm.yyyy",
+            autoclose: true,
+            todayBtn: "linked",
+            daysOfWeekHighlighted: "0,6"
+        });
+
+        var ddlReciever = ajaxS2_ddlReciever();
+
+        ddlReciever.on("change", function (e) {
+            var name = ddlReciever.val();
+            if (!name)
+                return;
+
+            toCustomDate(2);
+        });
+
+        $('#divReceiverType a[data-receivertype]').on('click',
+            function(event) {
+                $("#divReceiverType").find("i.fa-check").removeClass("fa-check");
+
+                var anchor = event.currentTarget;
+                var image = $(anchor.children[0]);
+                image.toggleClass("fa-check");
+
+                var receivertype = anchor.getAttribute('data-receivertype');
+                var divReciever = $("#divReciever");
+                $('#ddlReciever').val('').trigger('change');
+
+                if (receivertype === '3') {
+                    divReciever.css({ 'min-width': '150px', 'max-width': '150px' });
+                    divReciever.find(".select2-selection__placeholder").text('Группа');
+                } else if(receivertype === '1') {
+                    divReciever.css({ 'min-width': '200px', 'max-width': '200px' });
+                    divReciever.find(".select2-selection__placeholder").text('Преподаватель');
+
+                } else if (receivertype === '2') {
+                    divReciever.css({ 'min-width': '150px', 'max-width': '150px' });
+                    divReciever.find(".select2-selection__placeholder").text('Аудитория');
+                }
+
+                return false;
+            }
+        );
+    });
+
+</script>
+
+<div class="d-flex flex-wrap">
+    <div>
+        <div class="btn-group" role="group">
+            <button class="btn btn-sm btn-light border border-secondary" type="button" role="button" onclick="toWeek(-1)">Предыдущая</button>
+
+            <button class="btn btn-sm btn-light border border-secondary" type="button" role="button" onclick="toWeek(0)">
+                Текущая неделя
+            </button>
+
+            <button class="btn btn-sm btn-light border border-secondary" type="button" role="button" onclick="toWeek(1)">Следующая</button>
+        </div>
+    </div>
+
+    <div>
+        <div class="input-daterange input-group">
+            <span class="input-group-addon mx-1 fw-bold"> с </span>
+            <input id="startDate" type="text" class="form-control form-control-sm" style="min-width: 100px; max-width: 100px;" value="21.09.2026" />
+
+                <span class="input-group-addon mx-1 fw-bold"> по </span>
+                <input id="endDate" type="text" class="form-control form-control-sm" style="min-width: 100px; max-width: 100px;" value="27.09.2026" />
+        </div>
+    </div>
+
+    <div>
+        <div class="input-group">
+                    <div id="divReciever" style="min-width: 150px; max-width: 150px;">
+                        <select id="ddlReciever" data-placeholder="Группа">
+                                <option value="Б-12-21" selected="selected">Б-12-21</option>
+                        </select>
+                    </div>
+
+
+            <button class="btn btn-sm btn-light border border-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown"><span class="caret"></span></button>
+            <div id="divReceiverType" class="dropdown-menu dropdown-menu-end">
+
+
+                    <a class="dropdown-item" style="cursor:pointer" data-receivertype="3">
+                            <i class="fa fa-fw fa-check"></i>
+ Учебная группа
+                    </a>
+                    <a class="dropdown-item" style="cursor:pointer" data-receivertype="1">
+                            <i class="fa fa-fw"></i>
+ Преподаватель
+                    </a>
+                    <a class="dropdown-item" style="cursor:pointer" data-receivertype="2">
+                            <i class="fa fa-fw"></i>
+ Аудитория
+                    </a>
+            </div>
+
+            <button class="btn btn-sm btn-light border border-secondary" type="button" role="button" onclick="toCustomDate(2)">Просмотр</button>
+
+                <button class="btn btn-sm btn-light border border-secondary" type="button" role="button" onclick="toCustomDate(1)">Таблицей</button>
+        </div>
+    </div>
+</div>
+
+
+
+<span style="font-weight: bold; font-size: 20px;">
+Б-12-21 (4 курс, очная)</span>
+
+<style>
+    tr.th-today > td {
+        background: #99edc2;
+        border: 1px solid #dee2e6;
+    }
+
+    tr.th-primary > td {
+        background: #b8daff;
+        border: 1px solid #dee2e6;
+    }
+
+    tr.th-primary-odd > td {
+        background: #c6bbff;
+        border: 1px solid #dee2e6;
+    }
+
+    tr.tr-today > td {
+        background: #eeffeb;
+    }
+</style>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered table-hover mb-0">
+            <tbody>
+                        <tr class="th-primary">
+                            <td colspan="2">
+                                <strong>
+                                    понедельник, 21 сентября, 4 нед.
+                                </strong>
+                            </td>
+                        </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>09:20-10:55</strong>
+                                        <br />
+                                        <strong>1 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=2485" target="_blank">А-102 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Дискретная математика (Лекция)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=14956" target="_blank">доц. Лапин А.А.</a>
+
+                                </td>
+                            </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>11:10-12:45</strong>
+                                        <br />
+                                        <strong>2 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=2485" target="_blank">А-102 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Дискретная математика (Практическое занятие)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=14956" target="_blank">доц. Лапин А.А.</a>
+
+                                </td>
+                            </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>13:45-15:20</strong>
+                                        <br />
+                                        <strong>3 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=1058" target="_blank">А-103 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Информатика (Лекция)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=14966" target="_blank">доц. Фомин Д.А.</a>
+
+                                </td>
+                            </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>15:35-17:10</strong>
+                                        <br />
+                                        <strong>4 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=1058" target="_blank">А-103 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Информатика (Лабораторная работа)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=14966" target="_blank">доц. Фомин Д.А.</a>
+
+                                </td>
+                            </tr>
+                        <tr class="th-primary">
+                            <td colspan="2">
+                                <strong>
+                                    вторник, 22 сентября
+                                </strong>
+                            </td>
+                        </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>09:20-10:55</strong>
+                                        <br />
+                                        <strong>1 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=2259" target="_blank">А-104 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Прикладная кибернетика (по выбору) (Лекция)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=14855" target="_blank">проф. Тихонов А.Б.</a>
+
+                                </td>
+                            </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>09:20-10:55</strong>
+                                        <br />
+                                        <strong>1 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=1074" target="_blank">А-101 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Вычислительная геометрия (по выбору) (Лекция)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=14831" target="_blank">проф. Орлов А.А.</a>
+
+                                </td>
+                            </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>11:10-12:45</strong>
+                                        <br />
+                                        <strong>2 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=1074" target="_blank">А-101 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Вычислительная геометрия (по выбору) (Практическое занятие)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=14831" target="_blank">проф. Орлов А.А.</a>
+
+                                </td>
+                            </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>11:10-12:45</strong>
+                                        <br />
+                                        <strong>2 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=2259" target="_blank">А-104 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Прикладная кибернетика (по выбору) (Практическое занятие)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=14855" target="_blank">проф. Тихонов А.Б.</a>
+
+                                </td>
+                            </tr>
+                        <tr class="th-primary">
+                            <td colspan="2">
+                                <strong>
+                                    среда, 23 сентября
+                                </strong>
+                            </td>
+                        </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>11:10-12:45</strong>
+                                        <br />
+                                        <strong>2 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=2301" target="_blank">А-105 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Теория графов и сетей (Консультация по КР)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=15002" target="_blank">доц. Соколов А.Е.</a>
+
+                                </td>
+                            </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>13:45-15:20</strong>
+                                        <br />
+                                        <strong>3 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=2248" target="_blank">Г-202 (Корпус В)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Социология (Лекция)
+                                    </strong>
+                                    <br />
+
+Б-1,2,3,4,5,6,7,8-11
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=15502" target="_blank">ст.преп. Тарасова О.Г.</a>
+
+                                </td>
+                            </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>15:35-17:10</strong>
+                                        <br />
+                                        <strong>4 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=1058" target="_blank">А-103 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Теория графов и сетей (Лекция)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=15002" target="_blank">доц. Соколов А.Е.</a>
+
+                                </td>
+                            </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>17:20-18:50</strong>
+                                        <br />
+                                        <strong>5 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=1058" target="_blank">А-103 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Теория графов и сетей (Лабораторная работа)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=15002" target="_blank">доц. Соколов А.Е.</a>
+
+                                </td>
+                            </tr>
+                        <tr class="th-primary">
+                            <td colspan="2">
+                                <strong>
+                                    четверг, 24 сентября
+                                </strong>
+                            </td>
+                        </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>15:35-17:10</strong>
+                                        <br />
+                                        <strong>4 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=1259" target="_blank">А-201 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Математическая логика и теория множеств (Лекция)
+                                    </strong>
+                                    <br />
+
+Б-3,4,11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=16023" target="_blank">доц. Крылов Д.Г.</a>
+
+                                </td>
+                            </tr>
+                            <tr class="">
+                                <td class="col-auto">
+                                    <strong>17:20-18:50</strong>
+                                        <br />
+                                        <strong>5 пара</strong>
+                                    <br />
+                                    <a href="/bars_web/Open/RUZ/Timetable?rt=2&amp;aud_oid=1058" target="_blank">А-103 (Корпус А)</a>
+                                </td>
+                                <td>
+                                    <strong>
+                                        Математическая логика и теория множеств (Практическое занятие)
+                                    </strong>
+                                    <br />
+
+Б-11,12-21
+                                        <br />
+                                            <a href="/bars_web/Open/RUZ/Timetable?rt=1&amp;lec_oid=16023" target="_blank">доц. Крылов Д.Г.</a>
+
+                                </td>
+                            </tr>
+
+            </tbody>
+        </table>
+    </div>

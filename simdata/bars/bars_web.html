@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="format-detection" content="telephone=no" />
+
+        <link rel="apple-touch-icon" sizes="180x180" href="/bars_web/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/bars_web/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/bars_web/favicon-16x16.png" />
+    <link rel="manifest" href="/bars_web/site.webmanifest.json" />
+    <link rel="shortcut icon" type="image/x-icon" href="/bars_web/favicon.ico" />
+    <link rel="shortcut icon" type="image/ico" href="/bars_web/favicon.ico" />
+
+
+    <title>БАРС МЭИ</title>
+
+    <link href="/bars_web/bundles/css/bootstrap?v=tx-o8HnHKPIA4YJJmE6QZ7oA56dRxVk4pjDE-VYVo3g1" rel="stylesheet"/>
+
+    <link href="/bars_web/bundles/css/icc_site?v=TrGhwDCxv9CHm6AeQ1CbiVugnnGBnERNV0nA9KrFNn01" rel="stylesheet"/>
+
+
+
+
+    <script src="/bars_web/bundles/js/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <script src="/bars_web/bundles/js/jquery?v=j6pjp2AOdt25ZdKyOsQp0ohW0HR_80iFuE0aNqR_ylQ1"></script>
+
+    <script src="/bars_web/bundles/js/jqueryval?v="></script>
+
+    <script src="/bars_web/bundles/js/bootstrap?v=N0l0MOQ_9wwZWbnAvi1h1XoLugPi2HcIfhQRqoTN3Yk1"></script>
+
+    <script src="/bars_web/bundles/js/slep?v=kOuNBGLAraZ51wILiA2J4Y7IXuYKkhJ4QnLc-JYZM5M1"></script>
+
+
+
+
+    <!-- Yandex.Metrika counter -->
+<script type="text/javascript">
+    (function (m, e, t, r, i, k, a) {
+        m[i] = m[i] || function () { (m[i].a = m[i].a || []).push(arguments) };
+        m[i].l = 1 * new Date();
+        k = e.createElement(t), a = e.getElementsByTagName(t)[0], k.async = 1, k.src = r, a.parentNode.insertBefore(k, a);
+        })
+        (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+
+    ym(87692175, "init", {
+        clickmap: true,
+        trackLinks: true,
+        accurateTrackBounce: true
+    });
+</script>
+<noscript><div><img src="https://mc.yandex.ru/watch/87692175" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+<!-- /Yandex.Metrika counter -->
+
+</head>
+<body>
+
+
+<link href="/bars_web/bundles/css/icc_login?v=58SSUl9-wXF5es50QBYDQlnqvEfG3WdcYj3_BX9EIaE1" rel="stylesheet"/>
+
+
+
+<script src="/bars_web/bundles/js/icc_login?v=hNpJbAxflWp1NSSW_N2j8Yn8NqZEd9z-suvD778MiMo1"></script>
+
+
+
+
+<script>
+    $(document).ready(function () {
+        $('#Password,#Account').keypress(function (e) {
+            if (e.which !== 13)
+                return;
+
+            login();
+        });
+    });
+</script>
+
+
+<div class="form-signin">
+    <span class="h2">
+        БАРС МЭИ
+    </span>
+
+<form action="/bars_web/?ReturnUrl=https%3A%2F%2Fbars.mpei.ru%2Fbars_web%2FST_Study%2FMain%2FMain%3FstudentID%3D1f061364-9447-ee11-80da-005056be401c" class="mt-3" method="post"><input name="__RequestVerificationToken" type="hidden" value="1LUaxfyVmM-GLWp9n9ZXzhjM8Vy5jAo2QUFQxN4JbpllElPH1Q4VoLA_pX38yTULIEnWOD8mYvyA54eZIB47CA1V6fnH0V-WcwkCplXd-fw1" /><input data-val="true" data-val-required="Требуется поле StopOpenDefault." id="StopOpenDefault" name="StopOpenDefault" type="hidden" value="False" />        <div class="offset-1 col-10">
+            <div class="input-group">
+                <span class="input-group-text">
+                    <i class="fa fa-user"></i>
+                </span>
+
+                <input autocomplete="true" class="form-control" data-val="true" data-val-regex="Логин состоит из символов латинского алфавита и, возможно, разделителя домена &#39;\&#39;; @mpei.ru не указываются." data-val-regex-pattern="^[a-zA-Z0-9 \\/_\!*-]+$" data-val-required="Введите логин" id="Account" name="Account" placeholder="Введите логин" type="text" value="" />
+            </div>
+            <span class="field-validation-valid" data-valmsg-for="Account" data-valmsg-replace="true"></span>
+        </div>
+        <div class="offset-1 col-10 mt-2">
+            <div class="input-group">
+                <span class="input-group-text" style="padding: 0 10px">
+                    <i class="fa fa-key"></i>
+                </span>
+
+<input autocomplete="false" class="form-control" data-val="true" data-val-required="Введите пароль" id="Password" name="Password" placeholder="Введите пароль" type="password" />                    <button class="btn btn-light icc-pwd-toggle" type="button" onclick="tuggle_password(this, 'Password')">
+                        <i class="fa fa fa-lock"></i>
+                    </button>
+            </div>
+
+            <span class="field-validation-valid" data-valmsg-for="Password" data-valmsg-replace="true"></span>
+        </div>
+        <div class="offset-1 col-10 mt-2">
+            <button id="btnLogin" type="button" class="btn btn-block btn-primary w-100" onclick="login();">Войти</button>
+        </div>
+        <div class="offset-1 col-10 mt-2" style="line-height: 0px;">
+            <div class="d-flex">
+                <label>
+                    <input data-val="true" data-val-required="Требуется поле Запомнить меня." id="RememberMe" name="RememberMe" type="checkbox" value="true" /><input name="RememberMe" type="hidden" value="false" />
+                    Запомнить меня
+                </label>
+
+                <div class="ms-auto"></div>
+
+
+                <a id="specialButton" data-css-href="https://bars.mpei.ru/bars_web/bundles/slep/special.min.css" data-offset="2px" style="cursor: pointer; font-size: 18px; margin-left: 8px; margin-top: -2px;">
+                    <i class="fa fa-eye"></i>
+                </a>
+            </div>
+        </div>
+        <div class="col-12">
+            <div class="text-center">
+
+
+
+
+                <b>
+                    <a style="font-weight: bold" href="https://vkvideo.ru/video-211764793_456239108" target="_blank">
+                        <i class="fa fa-exclamation-circle" style="color: red;"></i>
+                        2-х факторная аутентификация (обновлено)
+                    </a>
+                </b>
+
+                <br />
+                <a href="https://bars.mpei.ru/bars_web/Open/Help/Help" target="_blank">Справочная информация о БАРС МЭИ</a>
+
+                <br />
+                <b> Тех. поддержка: <a href='mailto:bars.support@example.com'>bars.support@example.com</a> </b>
+
+                <br />
+                <b> Обращения принимаются только <a href="https://mpei.ru/Structure/uchchast/icc/ddiisas/Pages/osep.aspx"> с почтовых ящиков МЭИ (ОСЭП) </a></b>
+
+                <br />
+                <b><a href='https://mpei.ru/feedback/Pages/information_and_technical_support.aspx' target="_blank">Получить учётную запись МЭИ, восстановить логин/пароль</a></b>
+
+                <br />
+                <i class="fa fa-vk" style="color: #0077FF"></i>
+                <a href="https://vk.ru/bars_mpei" target="_blank" style="color: black">
+                    Группа ВКонтакте
+                </a>
+
+                <img src='/bars_web/Content/images/icc/base/max16.png' alt="" style="margin-left: 4px" />
+                <a href="https://max.ru/join/49r6DzPsjEjrr_AG26btPmvs3QGS2sd6p8N42E5ovQ8" target="_blank" style="color: black">
+                    Канал МАКС
+                </a>
+
+                <i class="fa fa-telegram" style="color: #0088cc; margin-left: 4px"></i>
+                <a href="https://t.me/bars_mpei" target="_blank" style="color: black">
+                    Telegram
+                </a>
+            </div>
+        </div>
+</form></div>
+</body>
+</html>

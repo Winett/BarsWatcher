@@ -1,0 +1,239 @@
+
+
+<script>
+        function getQuery__PartialListStudent() {
+            var table = document.getElementById('tbl__PartialListStudent');
+            var query = {};
+            query.State = table.getAttribute('data-q-state');
+
+            if (query.State !== "1") {
+                query.SortOrder = table.getAttribute('data-q-sort-order');
+                query.Page = table.getAttribute('data-q-page');
+                query.PageSize = table.getAttribute('data-q-page-size');
+                query.SearchText = ENtoRU($('#student__Search').val().trim());
+
+                query.FilterFIO = ENtoRU($('#tb_FilterFIO').val().trim());
+                query.FilterNumberOfCreditBook = ENtoRU($('#tb_FilterNumberOfCreditBook').val().trim());
+                query.FilterTrainingStatus = ENtoRU($('#tb_FilterTrainingStatus').val().trim());
+                query.FilterStudyGroupName = ENtoRU($('#tb_FilterStudyGroupName').val().trim());
+                query.FilterInstituteName = ENtoRU($('#tb_FilterInstituteName').val().trim());
+                query.FilterAE_OrganizationName = ENtoRU($('#tb_FilterAE_OrganizationName').val().trim());
+            }
+
+            return JSON.stringify(query);
+        }
+
+        $(document).ready(function () {
+            $('#tb_FilterFIO, #tb_FilterNumberOfCreditBook, #tb_FilterTrainingStatus, #tb_FilterStudyGroupName, #tb_FilterSubfacultyName, #tb_FilterInstituteName, #tb_FilterAE_OrganizationName').keypress(function (e) {
+                if (e.which !== 13)
+                    return;
+
+                filter__PartialListStudent();
+            });
+        });
+</script>
+
+<div class="border bg-light">
+<div class="row p-1">
+    <div class="col-0 col-md-4 col-lg-4 pt-1">
+        <span class="h6 fw-bold d-none d-md-inline">Список студентов</span>
+    </div>
+
+    <div class="col-12 col-md-8 col-lg-8">
+        <div class="input-group">
+            <input class="form-control" placeholder="Поиск..." type="text" id="student__Search" value="">
+
+            <button id="student__Filter" role="button" class="btn btn-light border border-secondary">
+                <i class="fa fa-search"></i>
+            </button>
+            <button id="student__FilterClear" role="button" class="btn btn-light border border-secondary">
+                <i class="fa fa-remove"></i>
+            </button>
+        </div>
+    </div>
+</div>
+    <div class="table-responsive">
+        <table id="tbl__PartialListStudent"
+               data-q-href="/bars_web/ST/Student/_PartialListStudent"
+               data-q-sort-order="st_FIO"
+               data-q-page="1"
+               data-q-page-size="10"
+               class="table table-sm table-striped table-bordered table-hover mb-0">
+            <thead>
+                <tr>
+                    <th class="w-20">
+                        <a href="#" data-col-name="st_FIO" class="text-dark">ФИО<i class="fa fa-sort-down ms-1"></i></a>
+                    </th>
+                    <th class="w-15">
+                        <a href="#" data-col-name="st_NumberOfCreditBook" class="text-dark">Зачётная книжка<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+                    <th class="w-15">
+                        <a href="#" data-col-name="ts_Name" class="text-dark">Статус (на сегодня)<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+                    <th class="w-10">
+                        <a href="#" data-col-name="sg_DisplayName" class="text-dark">Группа<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+                    <th class="w-10">
+                        <a href="#" data-col-name="subfac_ShortName" class="text-dark">Кафедра<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+                    <th class="w-10">
+                        <a href="#" data-col-name="inst_ShortName" class="text-dark">Институт<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+                    <th class="w-10">
+                        <a href="#" data-col-name="ae_org_ShortName" class="text-dark">Организация<i class="fa fa-sort ms-1"></i></a>
+                    </th>
+
+
+
+                    <th class="w-1 text-center">
+                        ЛК
+                    </th>
+                </tr>
+                <tr>
+                    <th>
+                        <input id="tb_FilterFIO" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+                    <th>
+                        <input id="tb_FilterNumberOfCreditBook" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+                    <th>
+                        <input id="tb_FilterTrainingStatus" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+                    <th>
+                        <input id="tb_FilterStudyGroupName" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+                    <th>
+                        <input id="tb_FilterSubfacultyName" type="text" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+                    <th>
+                        <input id="tb_FilterInstituteName" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+                    <th>
+                        <input id="tb_FilterAE_OrganizationName" type="text" value="" class="form-control form-control-sm" placeholder="все" />
+                    </th>
+
+
+
+                    <th>
+                    </th>
+                </tr>
+
+            </thead>
+
+                <tbody>
+                        <tr>
+                            <td>
+                                <a href="/bars_web/ST/Student/Main?studentID=1f061364-9447-ee11-80da-005056be401c">
+                                    Морозов Вадим Морозович
+                                </a>
+                            </td>
+
+                            <td>
+                                0020232553
+                            </td>
+
+                            <td>
+                                обучается
+                            </td>
+
+                            <td>
+                                Б-12-21
+                            </td>
+
+                            <td>
+                                МКМ
+                            </td>
+
+                            <td>
+                                ИВТИ
+                            </td>
+
+                            <td>
+                                МЭИ, г. Москва
+                            </td>
+
+
+
+                            <td>
+                                <div class="btn-group">
+                                    <a title="ЛКС"
+                                       class="btn btn-light border border-secondary"
+                                       href="/bars_web/ST/Student/Main?studentID=1f061364-9447-ee11-80da-005056be401c">
+                                        <i class="fa fa-graduation-cap"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="student__Pager" class="d-flex">
+    <div class='pager-size'><span>Отображены 1-1 записи из 1</span><br/><span>Отображать <select><option value='10' selected>10</option><option value='25'>25</option><option value='50'>50</option><option value='100'>100</option><option value='500'>500</option></select> записей</span></div>
+
+</div>
+
+<script type="text/javascript">
+    function filter__PartialListStudent() {
+                var table = document.getElementById('tbl__PartialListStudent');
+                table.setAttribute('data-q-page', '');
+                loadTableByQueryAsyncV2(table, 'div-Student', getQuery__PartialListStudent, this);
+                return false;
+            }
+
+            function filter_clear__PartialListStudent() {
+                var table = document.getElementById('tbl__PartialListStudent');
+                table.setAttribute('data-q-state', '1');
+                loadTableByQueryAsyncV2(table, 'div-Student', getQuery__PartialListStudent, this);
+                return false;
+            }
+
+            $(function()
+            {
+                $('#student__Pager a').on('click', function() {
+                    var table = document.getElementById('tbl__PartialListStudent');
+                    var parts = this.href.split('/')
+                    var page = 0;
+                    if(parts.length > 0) {
+                        page = parts[parts.length - 1];
+                    }
+                    table.setAttribute('data-q-page', page);
+                    loadTableByQueryAsyncV2(table, 'div-Student', getQuery__PartialListStudent, this);
+                    return false;
+                });
+
+                $('#student__Pager select:first').change(function() {
+                    var table = document.getElementById('tbl__PartialListStudent');
+                    table.setAttribute('data-q-page-size', $(this).val());
+                    table.setAttribute('data-q-page', 1);
+                    loadTableByQueryAsyncV2(table, 'div-Student', getQuery__PartialListStudent, this);
+                });
+
+                $('#student__Filter').on('click', function() {
+                    filter__PartialListStudent();
+                });
+
+                $('#student__FilterClear').on('click', function() {
+                    filter_clear__PartialListStudent();
+                });
+
+                $('#student__Search').keypress(function(e) {
+                    if (e.which === 13)
+                    {
+                        filter__PartialListStudent();
+                    }
+                });
+
+                $('#tbl__PartialListStudent thead tr th a[data-col-name]').on('click', function(e) {
+                    var table = document.getElementById('tbl__PartialListStudent');
+                    if (!e.shiftKey)
+                    {
+                        table.setAttribute('data-q-sort-order', '');
+                    }
+                    processSortOrder(table, this);
+                    loadTableByQueryAsyncV2(table, 'div-Student', getQuery__PartialListStudent, this);
+                    return false;
+                });
+            });
+</script>

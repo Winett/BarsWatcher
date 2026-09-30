@@ -1,0 +1,2323 @@
+
+
+<script src="/bars_web/bundles/js/icc_bars_student_study?v=owrGnSIbS1PlC0HleFMtjLQLvWuTQVSIH2o2Krx4rhY1"></script>
+
+
+<style>
+    span.km-retaken {
+        font-style: italic;
+    }
+
+    span.km-not-taken {
+        font-style: italic;
+        color: red;
+    }
+
+    span.sem-dpa {
+        font-style: italic;
+        color: green;
+    }
+
+    span.sem-ppa {
+        font-style: italic;
+        color: red;
+    }
+
+    tr.tr-odd td {
+        background-color: #000000;
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+
+    div.tr-me-res {
+        border: solid 1px grey;
+        padding: 4px;
+    }
+
+    td.km-bad {
+        background-color: #fbd4d4;
+    }
+
+    tr.tr-odd td.km-bad {
+        background-color: #fbd4d4;
+    }
+</style>
+
+<style>
+    .ddl_StudyFilterSemester {
+        width: 250px !important;
+        padding-left: 15px;
+    }
+
+        .ddl_StudyFilterSemester > .dropdown-menu.show {
+            z-index: 9999;
+        }
+</style>
+
+<script>
+    $(document).ready(function() {
+        $('#ddl_StudyFilterSemester').selectpicker({ styleBase: 'btn btn-light border border-secondary rounded-1' });
+
+        $('#ddl_StudyFilterSemester').change(function() {
+            var semesterIDValue = $(this).val();
+
+            showIndicator('busy_indicator');
+
+            var query = {};
+            query.ID = '1f061364-9447-ee11-80da-005056be401c';
+            query.FilterSemester = {};
+            query.FilterSemester.Value = semesterIDValue;
+
+            var data = {
+                'studentID': '1f061364-9447-ee11-80da-005056be401c',
+                'query': JSON.stringify(query)
+            };
+
+            var url = '/bars_web/ST_Study/Student_SemesterSheet/_PartialListStudent_SemesterSheet__Mark';
+
+            $.ajax({
+                url: url,
+                data: data,
+                type: 'GET',
+                cache: false,
+                success: function(result) {
+                    $('#div-Student_SemesterSheet__Mark').html(result);
+                    hideIndicator('busy_indicator');
+                },
+                error: function(xhr, textStatus, errorThrown) {
+                    hideIndicator('busy_indicator');
+                    showError(xhr);
+                }
+            });
+        });
+
+        $("span[data-ss-bad-id]").click(function(e) {
+            var ssID = this.getAttribute("data-ss-bad-id");
+            if (!ssID)
+                return;
+
+            var esKM = this.getAttribute("data-ss-es-km");
+            var esPA = this.getAttribute("data-ss-es-pa");
+
+            var url = '/bars_web/ST_Study/Student_SemesterSheet/EmployeeScheduleInfoKM_PA';
+            url += "?ssID=" + ssID;
+            url += "&esKM=" + esKM;
+            url += "&esPA=" + esPA;
+
+            var srcElement = $(this);
+            ajaxGetLoadModal(srcElement, url);
+        });
+
+        $("span[data-ss-practice-id]").click(function(e) {
+            var ssID = this.getAttribute("data-ss-practice-id");
+            if (!ssID)
+                return;
+
+            var url = '/bars_web/ST_Study/Student_SemesterSheet/EmployeeScheduleInfoPractice';
+            url += "?ssID=" + ssID;
+            var srcElement = $(this);
+            ajaxGetLoadModal(srcElement, url);
+        });
+
+        $("span[data-ss-exam-auto-id],a[data-ss-exam-auto-id]").click(function(e) {
+            var ssID = this.getAttribute("data-ss-exam-auto-id");
+            if (!ssID)
+                return;
+
+            var url = '/bars_web/ST_Study/Student_SemesterSheet/ModalEditSemesterExamAuto?uip=27';
+            url += "&ssID=" + ssID;
+            var srcElement = $(this);
+            var bindData = { func: callbackShowModal, target: 'div-Student_SemesterSheet__Mark' };
+            ajaxGetLoadModal(srcElement, url, bindData);
+        });
+    });
+</script>
+
+<div class="row">
+    <div class="col">
+        <label class="col-form-label">Семестр обучения</label>
+        <select class="ddl_StudyFilterSemester" id="ddl_StudyFilterSemester" name="ddl_StudyFilterSemester"><option selected="selected" value="28">2026/2027, Осенний семестр</option>
+<option value="27">2025/2026, Весенний семестр</option>
+<option value="26">2025/2026, Осенний семестр</option>
+<option value="25">2024/2025, Весенний семестр</option>
+<option value="24">2024/2025, Осенний семестр</option>
+<option value="23">2023/2024, Весенний семестр</option>
+<option value="22">2023/2024, Осенний семестр</option>
+<option value="21">2022/2023, Весенний семестр</option>
+<option value="20">2022/2023, Осенний семестр</option>
+</select>
+    </div>
+</div>
+
+<hr class="hr-separator" />
+
+    <span class="h3">
+        2026/2027, Осенний семестр
+    </span>
+    <a href="#" class="h5" id="s_ss_All" role="button">Развернуть всё</a>
+    <hr class="hr-separator">
+        <div class="my-2">
+            <div data-bs-toggle="collapse" data-bs-target="#s_ss_0" style="cursor: pointer; display: inline">
+
+
+                Информатика, Фомин Д.А. (руководитель - Фомин Д.А.), защита КП/КР, 5ЗЕ
+
+                    <span class="badge bg-light" style="font-size: 14px;" title="в 23.59 22.12.2026 будет зафиксирована семестровая составляющая">сдать до 23.12.2026</span>
+
+
+            </div>
+
+
+
+
+
+            <div style="display: inline">
+                <a href="#s_ss_0" role="button">Развернуть</a>
+            </div>
+
+        </div>
+        <div id="s_ss_0" class="collapse">
+
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Наименование контрольного мероприятия</th>
+                            <th>Вес, %</th>
+                            <th>Срок проведения, № недели (дата)</th>
+                            <th>Оценка, дата получения</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+
+                        <tr>
+                            <td colspan="4"><em>Текущий контроль:</em></td>
+                        </tr>
+
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    1. соблюдение графика выполнения КР
+
+
+                                </td>
+                                <td>10</td>
+
+                                <td>
+4 (21.09.26-27.09.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    2. соблюдение графика выполнения КР
+
+
+                                </td>
+                                <td>60</td>
+
+                                <td>
+12 (16.11.26-22.11.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    3. соблюдение графика выполнения КР и качество оформления КР
+
+
+                                </td>
+                                <td>30</td>
+
+                                <td>
+16 (14.12.26-20.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+
+
+
+                        <tr >
+                            <td colspan="3">Балл текущего контроля: </td>
+                            <td>
+                                
+                            </td>
+                        </tr>
+
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №1</td>
+                            <td>4</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №2</td>
+                            <td>8</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №3</td>
+                            <td>12</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="3"><em>Промежуточная аттестация (защита кп/кр):</em></td>
+                            <td>
+
+                                    <a class="btn btn-link p-0" style="cursor: pointer; text-align: justify" data-ss-exam-auto-id="2389875">
+                                    </a>
+
+
+
+                            </td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3">
+                                <strong>
+                                    Итоговая оценка:
+                                </strong>
+                            </td>
+
+                            <td style="font-weight: bold">
+
+
+
+
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <hr class="hr-separator" />
+        <div class="my-2">
+            <div data-bs-toggle="collapse" data-bs-target="#s_ss_1" style="cursor: pointer; display: inline">
+
+
+                Информатика, Фомин Д.А., зачёт с оценкой (по совокупности), 5ЗЕ
+
+                    <span class="badge bg-light" style="font-size: 14px;" title="в 23.59 22.12.2026 будет зафиксирована семестровая составляющая">сдать до 23.12.2026</span>
+
+
+            </div>
+
+
+
+
+
+            <div style="display: inline">
+                <a href="#s_ss_1" role="button">Развернуть</a>
+            </div>
+
+        </div>
+        <div id="s_ss_1" class="collapse">
+
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Наименование контрольного мероприятия</th>
+                            <th>Вес, %</th>
+                            <th>Срок проведения, № недели (дата)</th>
+                            <th>Оценка, дата получения</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+
+                        <tr>
+                            <td colspan="4"><em>Текущий контроль:</em></td>
+                        </tr>
+
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    1. Проектирование реляционных баз данных
+
+
+                                </td>
+                                <td>20</td>
+
+                                <td>
+4 (21.09.26-27.09.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    2. Разработка запросов на языке SQL
+
+
+                                </td>
+                                <td>40</td>
+
+                                <td>
+8 (19.10.26-25.10.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    3. Разработка приложения, использующего базу данных
+
+
+                                </td>
+                                <td>30</td>
+
+                                <td>
+12 (16.11.26-22.11.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    4. Основные задачи администрирования баз данных
+
+
+                                </td>
+                                <td>10</td>
+
+                                <td>
+15 (07.12.26-13.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3">Балл текущего контроля: </td>
+                            <td>
+                                
+                            </td>
+                        </tr>
+
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №1</td>
+                            <td>4</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №2</td>
+                            <td>8</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №3</td>
+                            <td>12</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3"><em>Промежуточная аттестация (зачёт с оценкой):</em></td>
+                            <td>
+
+                                    <a class="btn btn-link p-0" style="cursor: pointer; text-align: justify" data-ss-exam-auto-id="2389844">
+                                    </a>
+
+
+
+                            </td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="3">
+                                <strong>
+                                    Итоговая оценка:
+                                </strong>
+                            </td>
+
+                            <td style="font-weight: bold">
+
+
+
+
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <hr class="hr-separator" />
+        <div class="my-2">
+            <div data-bs-toggle="collapse" data-bs-target="#s_ss_2" style="cursor: pointer; display: inline">
+
+
+                Теория графов и сетей, Соколов А.Е. (руководитель - Соколов А.Е.), защита КП/КР, 1ЗЕ
+
+                    <span class="badge bg-light" style="font-size: 14px;" title="в 23.59 22.12.2026 будет зафиксирована семестровая составляющая">сдать до 23.12.2026</span>
+
+
+            </div>
+
+
+
+
+
+            <div style="display: inline">
+                <a href="#s_ss_2" role="button">Развернуть</a>
+            </div>
+
+        </div>
+        <div id="s_ss_2" class="collapse">
+
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Наименование контрольного мероприятия</th>
+                            <th>Вес, %</th>
+                            <th>Срок проведения, № недели (дата)</th>
+                            <th>Оценка, дата получения</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+
+                        <tr>
+                            <td colspan="4"><em>Текущий контроль:</em></td>
+                        </tr>
+
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    1. Выполнение раздела 1.
+
+
+                                </td>
+                                <td>10</td>
+
+                                <td>
+8 (19.10.26-25.10.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    2. Соблюдение графика выполнения работы
+
+
+                                </td>
+                                <td>10</td>
+
+                                <td>
+12 (16.11.26-22.11.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    3. Выполнение разделов 2 и 3
+
+
+                                </td>
+                                <td>40</td>
+
+                                <td>
+15 (07.12.26-13.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    4. Качество оформления отчета
+
+
+                                </td>
+                                <td>40</td>
+
+                                <td>
+16 (14.12.26-20.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3">Балл текущего контроля: </td>
+                            <td>
+                                
+                            </td>
+                        </tr>
+
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №1</td>
+                            <td>4</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №2</td>
+                            <td>8</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №3</td>
+                            <td>12</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3"><em>Промежуточная аттестация (защита кп/кр):</em></td>
+                            <td>
+
+                                    <a class="btn btn-link p-0" style="cursor: pointer; text-align: justify" data-ss-exam-auto-id="2303344">
+                                    </a>
+
+
+
+                            </td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="3">
+                                <strong>
+                                    Итоговая оценка:
+                                </strong>
+                            </td>
+
+                            <td style="font-weight: bold">
+
+
+
+
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <hr class="hr-separator" />
+        <div class="my-2">
+            <div data-bs-toggle="collapse" data-bs-target="#s_ss_3" style="cursor: pointer; display: inline">
+
+
+                Теория графов и сетей, Соколов А.Е., экзамен, 5ЗЕ
+
+                    <span class="badge bg-light" style="font-size: 14px;" title="в 23.59 22.12.2026 будет зафиксирована семестровая составляющая">сдать до 23.12.2026</span>
+
+
+            </div>
+
+
+
+
+
+            <div style="display: inline">
+                <a href="#s_ss_3" role="button">Развернуть</a>
+            </div>
+
+        </div>
+        <div id="s_ss_3" class="collapse">
+
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Наименование контрольного мероприятия</th>
+                            <th>Вес, %</th>
+                            <th>Срок проведения, № недели (дата)</th>
+                            <th>Оценка, дата получения</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+
+                        <tr>
+                            <td colspan="4"><em>Текущий контроль:</em></td>
+                        </tr>
+
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    1. QR-разложение матриц
+
+
+                                </td>
+                                <td>15</td>
+
+                                <td>
+4 (21.09.26-27.09.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    2. Переопределенные системы
+
+
+                                </td>
+                                <td>30</td>
+
+                                <td>
+8 (19.10.26-25.10.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    3. Проекционные методы решения СЛАУ
+
+
+                                </td>
+                                <td>35</td>
+
+                                <td>
+12 (16.11.26-22.11.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    4. Решение нелинейных систем
+
+
+                                </td>
+                                <td>20</td>
+
+                                <td>
+16 (14.12.26-20.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3">Балл текущего контроля: </td>
+                            <td>
+                                
+                            </td>
+                        </tr>
+
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №1</td>
+                            <td>4</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №2</td>
+                            <td>8</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №3</td>
+                            <td>12</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3"><em>Промежуточная аттестация (экзамен):</em></td>
+                            <td>
+
+                                    <a class="btn btn-link p-0" style="cursor: pointer; text-align: justify" data-ss-exam-auto-id="2303636">
+                                    </a>
+
+
+
+                            </td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="3">
+                                <strong>
+                                    Итоговая оценка:
+                                </strong>
+                            </td>
+
+                            <td style="font-weight: bold">
+
+
+
+
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <hr class="hr-separator" />
+        <div class="my-2">
+            <div data-bs-toggle="collapse" data-bs-target="#s_ss_4" style="cursor: pointer; display: inline">
+
+
+                Дискретная математика, Лапин А.А., экзамен, 4ЗЕ
+
+                    <span class="badge bg-light" style="font-size: 14px;" title="в 23.59 22.12.2026 будет зафиксирована семестровая составляющая">сдать до 23.12.2026</span>
+
+
+            </div>
+
+
+
+
+
+            <div style="display: inline">
+                <a href="#s_ss_4" role="button">Развернуть</a>
+            </div>
+
+        </div>
+        <div id="s_ss_4" class="collapse">
+
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Наименование контрольного мероприятия</th>
+                            <th>Вес, %</th>
+                            <th>Срок проведения, № недели (дата)</th>
+                            <th>Оценка, дата получения</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+
+                        <tr>
+                            <td colspan="4"><em>Текущий контроль:</em></td>
+                        </tr>
+
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    1. Составление математических моделей экономических задач
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes0" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>10</td>
+
+                                <td>
+4 (21.09.26-27.09.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes0" class="collapse tr-odd">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Задание выполнено полностью)
+                                            <br />
+
+4:  (Задание выполнено с незначительными ошибкмаи)                                                <br />
+3:  (При выполнении задания студент допустил существенные ошибки, но смог их исправить)                                                <br />
+                                            2:  (Задание не выполнено)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    2. Приведение задачи линейного программирования к каноническому и стандартному виду
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes1" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>10</td>
+
+                                <td>
+8 (19.10.26-25.10.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes1" class="collapse ">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Задание выполнено верно)
+                                            <br />
+
+4:  (Задание в целом выполнено верно, но есть незначительные ошибки)                                                <br />
+3:  (Задание выполнено с существенными ошибками)                                                <br />
+                                            2:  (Задание не выполнено)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    3. Решение задач линейного программирования графическим методом
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes2" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>10</td>
+
+                                <td>
+9 (26.10.26-01.11.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes2" class="collapse tr-odd">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Задание выполнено полностью)
+                                            <br />
+
+4:  (Задания выполнено с незначительными ошибками)                                                <br />
+3:  (При выполнении задания студент допустил существенные ошибки, но смог их исправить)                                                <br />
+                                            2:  (Задание не выполнено)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    4. Решение задач линейного программирования симплекс-методом
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes3" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>15</td>
+
+                                <td>
+12 (16.11.26-22.11.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes3" class="collapse ">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Задание выполнено полностью)
+                                            <br />
+
+4:  (Задание выполнено с незначительными ошибками)                                                <br />
+3:  (Студент при выполнении задания допустил существенные ошибки, но смог из исправить)                                                <br />
+                                            2:  (Задание не выполнено)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    5. Решение задач линейного программирования
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes4" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>15</td>
+
+                                <td>
+13 (23.11.26-29.11.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes4" class="collapse tr-odd">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Все задания выполнены верно)
+                                            <br />
+
+4:  (Две задачи выполнены верно или все задачи выполнены с незначительными ошибками)                                                <br />
+3:  (Одна задача выполнена верно или две задачи выполнены с незначительными ошибками)                                                <br />
+                                            2:  (Ни одна задача не решена полностью. Все решения содержат существенные ошибки)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    6. Решение задач нелинейного программирования.
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes5" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>15</td>
+
+                                <td>
+14 (30.11.26-06.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes5" class="collapse ">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Все задачи решены верно)
+                                            <br />
+
+4:  (Две задачи решены верно или все задачи решены с незначительными ошибками)                                                <br />
+3:  (Одна задача решена верно или две задачи решены с незначительными ошибками)                                                <br />
+                                            2:  (Ни одна задача не решена верно, все решения содержат существенные ошибки)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    7. Численная минимизация функции одной переменной
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes6" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>10</td>
+
+                                <td>
+15 (07.12.26-13.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes6" class="collapse tr-odd">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Задание выполнено полностью)
+                                            <br />
+
+4:  (Задание выполнено с незначительными ошибками)                                                <br />
+3:  (При выполнении задания студент допустил существенные ошибки, но смог самостоятельно их исправить)                                                <br />
+                                            2:  (Задание не выполнено)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    8. Численная минимизация функции многих переменных
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes7" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>15</td>
+
+                                <td>
+16 (14.12.26-20.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes7" class="collapse ">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Задание выполнено полностью)
+                                            <br />
+
+4:  (Задание выполнено с несущественными ошибками)                                                <br />
+3:  (Студент при выполнении задания сделал существенные ошибки, но смог самостоятельно их исправить)                                                <br />
+                                            2:  (Задание не выполнено)
+                                        </div>
+                                    </td>
+                                </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3">Балл текущего контроля: </td>
+                            <td>
+                                
+                            </td>
+                        </tr>
+
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №1</td>
+                            <td>4</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №2</td>
+                            <td>8</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №3</td>
+                            <td>12</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3"><em>Промежуточная аттестация (экзамен):</em></td>
+                            <td>
+
+                                    <a class="btn btn-link p-0" style="cursor: pointer; text-align: justify" data-ss-exam-auto-id="2281191">
+                                    </a>
+
+
+
+                            </td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="3">
+                                <strong>
+                                    Итоговая оценка:
+                                </strong>
+                            </td>
+
+                            <td style="font-weight: bold">
+
+
+
+
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <hr class="hr-separator" />
+        <div class="my-2">
+            <div data-bs-toggle="collapse" data-bs-target="#s_ss_5" style="cursor: pointer; display: inline">
+
+
+                Производственная практика: научно-исследовательская работа, Егоров А.М. (руководитель - Лапин А.А.), зачёт (без оценки), 3ЗЕ
+
+                    <span class="badge bg-light" style="font-size: 14px;" title="в 23.59 21.12.2026 будет зафиксирована семестровая составляющая">сдать до 22.12.2026</span>
+
+
+            </div>
+
+
+
+
+
+            <div style="display: inline">
+                <a href="#s_ss_5" role="button">Развернуть</a>
+            </div>
+
+        </div>
+        <div id="s_ss_5" class="collapse">
+
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Наименование контрольного мероприятия</th>
+                            <th>Вес, %</th>
+                            <th>Срок проведения, № недели (дата)</th>
+                            <th>Оценка, дата получения</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+
+                        <tr>
+                            <td colspan="4"><em>Текущий контроль:</em></td>
+                        </tr>
+
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    1. Получение задания на практику
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes0" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>10</td>
+
+                                <td>
+1 (31.08.26-06.09.26)                                </td>
+
+
+
+
+                                <td >
+5  (08.09.26)
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes0" class="collapse tr-odd">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5: своевременно (задание получено в срок, подписано преподавателем и студентом, принято студентом к исполнению)
+                                            <br />
+
+                                            2: неудовлетворительно (не выполнены условия для оценки &#39;5&#39;)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    2. Равномерность работы в течение практики
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes1" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>30</td>
+
+                                <td>
+8 (19.10.26-25.10.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes1" class="collapse ">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5: отличное (выполнено не менее 30 % объема задания на практику)
+                                            <br />
+
+                                            2: неудовлетворительно (не выполнены условия для оценки &#39;5&#39;)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    3. Выполнение задания на практику в полном объеме
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes2" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>60</td>
+
+                                <td>
+16 (14.12.26-20.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes2" class="collapse tr-odd">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5: работа выполнена полностью в соответствии с заданием (выполнено 100 % объема задания на практику)
+                                            <br />
+
+                                            2: неудовлетворительно (не выполнены условия для оценки &#39;5&#39;)
+                                        </div>
+                                    </td>
+                                </tr>
+
+
+
+                        <tr >
+                            <td colspan="3">Балл текущего контроля: </td>
+                            <td>
+                                5,00
+                            </td>
+                        </tr>
+
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №1</td>
+                            <td>4</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №2</td>
+                            <td>8</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №3</td>
+                            <td>12</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="3"><em>Промежуточная аттестация (зачёт (без оценки)):</em></td>
+                            <td>
+
+                                    <a class="btn btn-link p-0" style="cursor: pointer; text-align: justify" data-ss-exam-auto-id="2266866">
+                                    </a>
+
+
+
+                            </td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3">
+                                <strong>
+                                    Итоговая оценка:
+                                </strong>
+                            </td>
+
+                            <td style="font-weight: bold">
+
+
+
+
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <hr class="hr-separator" />
+        <div class="my-2">
+            <div data-bs-toggle="collapse" data-bs-target="#s_ss_6" style="cursor: pointer; display: inline">
+
+
+                Прикладная кибернетика, Тихонов А.Б., экзамен, 4ЗЕ
+
+                    <span class="badge bg-light" style="font-size: 14px;" title="в 23.59 22.12.2026 будет зафиксирована семестровая составляющая">сдать до 23.12.2026</span>
+
+
+            </div>
+
+
+
+                <span class="badge bg-success-lite" style="font-size: 14px;" data-ss-exam-auto-id="2263503">получить оценку ПА</span>
+
+
+            <div style="display: inline">
+                <a href="#s_ss_6" role="button">Развернуть</a>
+            </div>
+
+        </div>
+        <div id="s_ss_6" class="collapse">
+
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Наименование контрольного мероприятия</th>
+                            <th>Вес, %</th>
+                            <th>Срок проведения, № недели (дата)</th>
+                            <th>Оценка, дата получения</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+
+                        <tr>
+                            <td colspan="4"><em>Текущий контроль:</em></td>
+                        </tr>
+
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    5. Методы ускорения алгебраических вычислений, квадратичные вычеты и квадратные корни
+
+
+                                </td>
+                                <td>25</td>
+
+                                <td>
+4 (21.09.26-27.09.26)                                </td>
+
+
+
+
+                                <td >
+
+5  (25.09.26)
+<!--                                           <br>-->
+<!--                                    <span class="km-retaken"> Пересдана: 2 (23.09.26) </span>-->
+<!--                                    <br>-->
+<!--                                    <span class="km-retaken"> Пересдана: 2 (24.09.26) </span>-->
+<!--                                    <br>-->
+<!--                                    <span class="km-not-taken"> Не учитывается: 5 (03.06.24) </span>-->
+<!--                                    <br>-->
+<!--                                    <span class="km-not-taken"> Не учитывается: 5 (03.06.24) </span>-->
+
+                                </td>
+                            </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    6. Методы анализа и генерации простых чисел, неприводимых многочленов и псевдослучайных последовательностей
+
+
+                                </td>
+                                <td>25</td>
+
+                                <td>
+8 (19.10.26-25.10.26)                                </td>
+
+
+
+
+                                <td >
+4  (25.09.26)
+
+                                </td>
+                            </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    7. Алгоритмы факторизации и дискретного логарифмирования
+
+
+                                </td>
+                                <td>25</td>
+
+                                <td>
+12 (16.11.26-22.11.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    8. Элементы эллиптической криптографии
+
+
+                                </td>
+                                <td>25</td>
+
+                                <td>
+15 (07.12.26-13.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3">Балл текущего контроля: </td>
+                            <td>
+                                4,50
+                            </td>
+                        </tr>
+
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №1</td>
+                            <td>4</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №2</td>
+                            <td>8</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №3</td>
+                            <td>12</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3"><em>Промежуточная аттестация (экзамен):</em></td>
+                            <td>
+
+                                    <a class="btn btn-link p-0" style="cursor: pointer; text-align: justify" data-ss-exam-auto-id="2263503">
+                                    </a>
+
+
+
+                            </td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="3">
+                                <strong>
+                                    Итоговая оценка:
+                                </strong>
+                            </td>
+
+                            <td style="font-weight: bold">
+
+
+
+
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <hr class="hr-separator" />
+        <div class="my-2">
+            <div data-bs-toggle="collapse" data-bs-target="#s_ss_7" style="cursor: pointer; display: inline">
+
+
+                Математическая логика и теория множеств, Крылов Д.Г., экзамен, 6ЗЕ
+
+                    <span class="badge bg-light" style="font-size: 14px;" title="в 23.59 22.12.2026 будет зафиксирована семестровая составляющая">сдать до 23.12.2026</span>
+
+
+            </div>
+
+
+
+
+
+            <div style="display: inline">
+                <a href="#s_ss_7" role="button">Развернуть</a>
+            </div>
+
+        </div>
+        <div id="s_ss_7" class="collapse">
+
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Наименование контрольного мероприятия</th>
+                            <th>Вес, %</th>
+                            <th>Срок проведения, № недели (дата)</th>
+                            <th>Оценка, дата получения</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+
+                        <tr>
+                            <td colspan="4"><em>Текущий контроль:</em></td>
+                        </tr>
+
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    1. Выборки. Точечные оценки.
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes0" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>15</td>
+
+                                <td>
+4 (21.09.26-27.09.26)                                </td>
+
+
+
+
+                                <td >
+4  (17.09.26)
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes0" class="collapse tr-odd">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Оценка &quot;отлично&quot; выставляется если задание выполнено в полном объеме или выполнено преимущественно верно)
+                                            <br />
+
+4:  (Оценка &quot;хорошо&quot; выставляется если задание выполнено на базовом уровне)                                                <br />
+3:  (Оценка &quot;удовлетворительно&quot; выставляется, если задание выполнено на пороговом уровне)                                                <br />
+                                            2:  (Оценка &quot;неудовлетворительно&quot; выставляется если не выполнены условия для оценки 3)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    2. Интервальные оценки.
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes1" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>15</td>
+
+                                <td>
+8 (19.10.26-25.10.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes1" class="collapse ">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Оценка &quot;отлично&quot; выставляется если задание выполнено в полном объеме или выполнено преимущественно верно)
+                                            <br />
+
+4:  (Оценка &quot;хорошо&quot; выставляется если задание выполнено на базовом уровне)                                                <br />
+3:  (Оценка &quot;удовлетворительно&quot; выставляется, если задание выполнено на пороговом уровне)                                                <br />
+                                            2:  (Оценка &quot;неудовлетворительно&quot; выставляется если не выполнены условия для оценки 3)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    3. Проверка гипотез.
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes2" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>30</td>
+
+                                <td>
+12 (16.11.26-22.11.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes2" class="collapse tr-odd">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Оценка &quot;отлично&quot; выставляется если задание выполнено в полном объеме или выполнено преимущественно верно)
+                                            <br />
+
+4:  (Оценка &quot;хорошо&quot; выставляется если задание выполнено на базовом уровне)                                                <br />
+3:  (Оценка &quot;удовлетворительно&quot; выставляется, если задание выполнено на пороговом уровне)                                                <br />
+                                            2:  (Оценка &quot;неудовлетворительно&quot; выставляется если не выполнены условия для оценки 3)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    4. Регрессионный анализ.
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes3" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>25</td>
+
+                                <td>
+14 (30.11.26-06.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes3" class="collapse ">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Оценка &quot;отлично&quot; выставляется если задание выполнено в полном объеме или выполнено преимущественно верно)
+                                            <br />
+
+4:  (Оценка &quot;хорошо&quot; выставляется если задание выполнено на базовом уровне)                                                <br />
+3:  (Оценка &quot;удовлетворительно&quot; выставляется, если задание выполнено на пороговом уровне)                                                <br />
+                                            2:  (Оценка &quot;неудовлетворительно&quot; выставляется если не выполнены условия для оценки 3)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    5. Статистические испытания.
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes4" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>15</td>
+
+                                <td>
+16 (14.12.26-20.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes4" class="collapse tr-odd">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Оценка &quot;отлично&quot; выставляется если задание выполнено в полном объеме или выполнено преимущественно верно)
+                                            <br />
+
+4:  (Оценка &quot;хорошо&quot; выставляется если задание выполнено на базовом уровне)                                                <br />
+3:  (Оценка &quot;удовлетворительно&quot; выставляется, если задание выполнено на пороговом уровне)                                                <br />
+                                            2:  (Оценка &quot;неудовлетворительно&quot; выставляется если не выполнены условия для оценки 3)
+                                        </div>
+                                    </td>
+                                </tr>
+
+
+
+                        <tr >
+                            <td colspan="3">Балл текущего контроля: </td>
+                            <td>
+                                
+                            </td>
+                        </tr>
+
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №1</td>
+                            <td>4</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №2</td>
+                            <td>8</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №3</td>
+                            <td>12</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="3"><em>Промежуточная аттестация (экзамен):</em></td>
+                            <td>
+
+                                    <a class="btn btn-link p-0" style="cursor: pointer; text-align: justify" data-ss-exam-auto-id="2264398">
+                                    </a>
+
+
+
+                            </td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3">
+                                <strong>
+                                    Итоговая оценка:
+                                </strong>
+                            </td>
+
+                            <td style="font-weight: bold">
+
+
+
+
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <hr class="hr-separator" />
+        <div class="my-2">
+            <div data-bs-toggle="collapse" data-bs-target="#s_ss_8" style="cursor: pointer; display: inline">
+
+
+                Социология, Тарасова О.Г., зачёт с оценкой, 3ЗЕ
+
+                    <span class="badge bg-light" style="font-size: 14px;" title="в 23.59 22.12.2026 будет зафиксирована семестровая составляющая">сдать до 23.12.2026</span>
+
+
+            </div>
+
+
+
+
+
+            <div style="display: inline">
+                <a href="#s_ss_8" role="button">Развернуть</a>
+            </div>
+
+        </div>
+        <div id="s_ss_8" class="collapse">
+
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Наименование контрольного мероприятия</th>
+                            <th>Вес, %</th>
+                            <th>Срок проведения, № недели (дата)</th>
+                            <th>Оценка, дата получения</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+
+                        <tr>
+                            <td colspan="4"><em>Текущий контроль:</em></td>
+                        </tr>
+
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    1. Спрос и предложение
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes0" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>20</td>
+
+                                <td>
+4 (21.09.26-27.09.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes0" class="collapse tr-odd">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Оценка &quot;отлично&quot; выставляется если задание выполнено в полном объеме или выполнено преимущественно верно)
+                                            <br />
+
+4:  (Оценка &quot;хорошо&quot; выставляется если большинство вопросов раскрыто. выбрано верное направление для решения задач)                                                <br />
+3:  (Оценка &quot;удовлетворительно&quot; выставляется если задание преимущественно выполнено)                                                <br />
+                                            2:  (Оценка &quot;неудовлетворительно&quot; выставляется если задание выполнено неверно или преимущественно не выполнено)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    2. Основные и оборотные средства предприятия
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes1" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>30</td>
+
+                                <td>
+8 (19.10.26-25.10.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes1" class="collapse ">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Оценка &quot;отлично&quot; выставляется если задание выполнено в полном объеме или выполнено преимущественно верно)
+                                            <br />
+
+4:  (Оценка &quot;хорошо&quot; выставляется если большинство вопросов раскрыто. выбрано верное направление для решения задач)                                                <br />
+3:  (Оценка &quot;удовлетворительно&quot; выставляется если задание преимущественно выполнено)                                                <br />
+                                            2:  (Оценка &quot;неудовлетворительно&quot; выставляется если задание выполнено неверно или преимущественно не выполнено)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr class=tr-odd>
+                                <td>
+                                    
+
+                                    3. Издержки. Прибыль. Рентабельность. Экономическая оценка инвестиций.
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes2" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>30</td>
+
+                                <td>
+12 (16.11.26-22.11.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes2" class="collapse tr-odd">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Оценка &quot;отлично&quot; выставляется если задание выполнено в полном объеме или выполнено преимущественно верно)
+                                            <br />
+
+4:  (Оценка &quot;хорошо&quot; выставляется если большинство вопросов раскрыто. выбрано верное направление для решения задач)                                                <br />
+3:  (Оценка &quot;удовлетворительно&quot; выставляется если задание преимущественно выполнено)                                                <br />
+                                            2:  (Оценка &quot;неудовлетворительно&quot; выставляется если задание выполнено неверно или преимущественно не выполнено)
+                                        </div>
+                                    </td>
+                                </tr>
+                            <tr >
+                                <td>
+                                    
+
+                                    4. Основы экономической теории
+
+
+                                        <div data-bs-toggle="collapse" data-bs-target="#divMERes3" style="cursor: pointer; display: inline">
+                                            <a class="btn btn-link py-0">
+                                                (критерии)
+                                            </a>
+                                        </div>
+                                </td>
+                                <td>20</td>
+
+                                <td>
+15 (07.12.26-13.12.26)                                </td>
+
+
+
+
+                                <td >
+
+
+                                </td>
+                            </tr>
+                                <tr id="divMERes3" class="collapse ">
+                                    <td colspan="4">
+                                        <div class="tr-me-res">
+                                            5:  (Оценка &quot;отлично&quot; выставляется если задание выполнено в полном объеме или выполнено преимущественно верно)
+                                            <br />
+
+4:  (Оценка &quot;хорошо&quot; выставляется если большинство вопросов раскрыто. выбрано верное направление для решения задач)                                                <br />
+3:  (Оценка &quot;удовлетворительно&quot; выставляется если задание преимущественно выполнено)                                                <br />
+                                            2:  (Оценка &quot;неудовлетворительно&quot; выставляется если задание выполнено неверно или преимущественно не выполнено)
+                                        </div>
+                                    </td>
+                                </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3">Балл текущего контроля: </td>
+                            <td>
+                                
+                            </td>
+                        </tr>
+
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №1</td>
+                            <td>4</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="2">Контрольная неделя №2</td>
+                            <td>8</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="2">Контрольная неделя №3</td>
+                            <td>12</td>
+                            <td></td>
+                        </tr>
+
+
+
+                        <tr class=tr-odd>
+                            <td colspan="3"><em>Промежуточная аттестация (зачёт с оценкой):</em></td>
+                            <td>
+
+                                    <a class="btn btn-link p-0" style="cursor: pointer; text-align: justify" data-ss-exam-auto-id="2273413">
+                                    </a>
+
+
+
+                            </td>
+                        </tr>
+
+
+
+                        <tr >
+                            <td colspan="3">
+                                <strong>
+                                    Итоговая оценка:
+                                </strong>
+                            </td>
+
+                            <td style="font-weight: bold">
+
+
+
+
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <hr class="hr-separator" />
+
+    <div class="row">
+        <div class="col-6">
+            <a href="/bars_web/Open/EmployeeSchedule/Schedule?est=1%3B2&sgID=ce991316-11df-ed11-80d9-005056be401c" target="_blank">
+                Графики приёма задолженностей
+            </a>
+        </div>
+        <div class="col-6">
+            <a href="/bars_web/Open/EmployeeSchedule/Schedule?est=3&sgID=ce991316-11df-ed11-80d9-005056be401c" target="_blank">
+                График приёма защит по практикам
+            </a>
+        </div>
+    </div>
