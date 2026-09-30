@@ -1,3 +1,18 @@
 .*/
 
 .env
+# сессия тестового скрипта (куки БАРС)
+session.json
+# дамп ответа неудачного входа (диагностика)
+failed_login.html
+
+# Python
+__pycache__/
+*.pyc
+
+# runtime-данные (логи, куки сессий, кэш вложений)
+logs/
+log.log
+sessions/
+database/
+attachments_cache/
