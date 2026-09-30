@@ -8,6 +8,7 @@ dependencies = [
     "aiogram>=3.31.0",
     "alembic>=1.19.1",
     "alembic-postgresql-enum>=1.10.0",
+    "arq>=0.26.1",
     "asyncpg>=0.31.0",
     "beautifulsoup4>=4.15.0",
     "cryptography>=50.0.1",
@@ -16,7 +17,7 @@ dependencies = [
     "psycopg2-binary>=2.9.12",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.15.0",
-    "redis>=8.1.0",
+    "redis>=4.2.0,<6",
     "sqlalchemy>=2.0.52",
 ]
 
@@ -25,3 +26,18 @@ dev = [
     "mypy>=2.3.1",
     "ruff>=0.16.4",
 ]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+# main.py — одноразовый эксперимент с IMAP/POP в корне, в репозиторий не идёт
+extend-exclude = ["main.py"]
+
+[tool.ruff.lint]
+# loguru использует {}-плейсхолдеры — правила logging-формата отключаем
+select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# в скриптах настройка окружения и sys.path идёт до импортов — намеренно
+"scripts/*" = ["E402"]

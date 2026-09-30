@@ -1,12 +1,12 @@
-from sqlalchemy import Integer, BigInteger, String, Boolean, ForeignKey, select
+from typing import TYPE_CHECKING
+
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, String, select
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
-    from .bars import BarsCredentials, BarsProfile, BarsState, BarsSettings
-    from .osep import OsepCredentials, OsepState, OsepSettings
+    from .bars import BarsCredentials, BarsProfile, BarsSettings, BarsState
+    from .osep import OsepCredentials, OsepSettings, OsepState
 
 from .base import Base
 from .mixin import TimestampMixin

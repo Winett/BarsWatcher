@@ -22,8 +22,8 @@ class SecurityManager:
                 encrypted_password.encode("utf-8")
             )
             return decrypted_password.decode("utf-8")
-        except ValueError:
+        except ValueError as e:
             logger.error(
                 "Невозможно расшифровать пароль! Возможно изменился SECRET_KEY"
             )
-            raise ValueError("Ошибка расшифровки пароля")
+            raise ValueError("Ошибка расшифровки пароля") from e

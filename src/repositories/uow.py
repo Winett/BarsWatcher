@@ -1,8 +1,19 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .bars import (
+    BarsCredentialsRepository,
+    BarsProfileRepository,
+    BarsSettingsRepository,
+    BarsStateRepository,
+)
+from .config import ConfigRepository
+from .monitoring import MonitoringRepository
+from .osep import (
+    OsepCredentialsRepository,
+    OsepSettingsRepository,
+    OsepStateRepository,
+)
 from .user import UserRepository
-from .bars import BarsStateRepository
-from .osep import OsepStateRepository
 
 
 class UnitOfWork:
@@ -10,8 +21,18 @@ class UnitOfWork:
         self.session = session
 
         self.users = UserRepository(session)
-        self.bars = BarsStateRepository(session)
-        self.osep = OsepStateRepository(session)
+
+        self.bars_state = BarsStateRepository(session)
+        self.bars_credentials = BarsCredentialsRepository(session)
+        self.bars_profile = BarsProfileRepository(session)
+        self.bars_settings = BarsSettingsRepository(session)
+
+        self.osep_state = OsepStateRepository(session)
+        self.osep_credentials = OsepCredentialsRepository(session)
+        self.osep_settings = OsepSettingsRepository(session)
+
+        self.config = ConfigRepository(session)
+        self.monitoring = MonitoringRepository(session)
 
     async def commit(self):
         await self.session.commit()

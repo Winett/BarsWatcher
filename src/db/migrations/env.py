@@ -1,9 +1,7 @@
+import asyncio
 import os
 import sys
-import asyncio
 from logging.config import fileConfig
-
-import alembic_postgresql_enum
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection

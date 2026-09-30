@@ -1,6 +1,7 @@
 from sqlalchemy.types import String, TypeDecorator
-from src.core.security import SecurityManager
+
 from src.core.config import settings
+from src.core.security import SecurityManager
 
 security_manager = SecurityManager(settings.secret_key.get_secret_value())
 

@@ -1,11 +1,13 @@
-from typing import Sequence, TypedDict, Unpack
+from collections.abc import Sequence
+from typing import TypedDict, Unpack
 
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, Select
 from sqlalchemy.orm import selectinload
 
-from .base import BaseRepository, IdType, ModelType
-from db.models import User
+from src.db.models import User
+
+from .base import BaseRepository
 
 
 class UserLoadOptions(TypedDict, total=False):
@@ -73,5 +75,5 @@ class UserRepository(BaseRepository[User, int]):
     async def get_active_users(
         self, **options: Unpack[UserLoadOptions]
     ) -> Sequence[User]:
-        stmt = select(self.model).where(self.model.active == True)
+        stmt = select(self.model).where(self.model.is_active)
         return await self._fetch_all(stmt, **options)
