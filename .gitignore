@@ -16,3 +16,7 @@ log.log
 sessions/
 database/
 attachments_cache/
+
+# docker-compose кастомизации (НЕ перезаписывать при git pull!)
+docker-compose.override.yml
+docker-compose.prod.yml
