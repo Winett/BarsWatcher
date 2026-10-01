@@ -26,7 +26,11 @@ __all__ = ["scheduler_tick", "scheduler_loop"]
 
 
 async def scheduler_tick() -> int:
-    """Одна выборка «кого проверять». Возвращает число поставленных проверок."""
+    """Одна выборка «кого проверять». Возвращает число поставленных проверок.
+
+    Проверки НЕ шлются разом — равномерно распределяются по времени
+    (не более 30 запросов/сек), чтобы не заблокировать сервис при старте.
+    """
     now = datetime.now(UTC)
     jobs: list[tuple[int, ServiceKind]] = []
 
@@ -66,8 +70,11 @@ async def scheduler_tick() -> int:
 
         await uow.commit()
 
+    # равномерно распределяем по времени: не более 30 запросов/сек
+    # (1/30 сек ≈ 33ms между publish), чтобы не ударить по сервису разом
     for user_id, service in jobs:
         await publish(PollDue(user_id=user_id, service=service))
+        await asyncio.sleep(1.0 / 30.0)
 
     return len(jobs)
 
