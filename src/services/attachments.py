@@ -76,8 +76,9 @@ class AttachmentCache:
         )
         path = entry / _safe_name(filename)
         if path.exists() and (time.time() - path.stat().st_mtime) < self._ttl:
-            logger.debug(
-                "вложение из кэша: {} (user={})", path.name, user_id
+            logger.info(
+                "📎 ИЗ КЭША: {} | id={} | user={}",
+                path.name, attachment_id, user_id,
             )
             return path
 
@@ -85,13 +86,37 @@ class AttachmentCache:
         entry.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
         logger.info(
-            "вложение скачано: {} | {} КБ | {} | user={}",
+            "⬇️ СКАЧАНО: {} | {} КБ | id={} | {} | user={}",
             path.name,
             len(data) // 1024,
+            attachment_id,
             "общий кэш" if self.is_shared(size) else "персональный",
             user_id,
         )
         return path
+
+    def get_if_cached(
+        self,
+        *,
+        attachment_id: str,
+        filename: str,
+        size: int,
+        user_id: int,
+    ) -> Path | None:
+        """Вернуть путь к файлу если он уже в кэше (и не просрочен), иначе None.
+
+        Используется в notifier чтобы НЕ скачивать повторно то, что уже
+        положил worker — иначе двойное скачивание и двойное удаление в логах.
+        """
+        entry = self._entry_dir(
+            attachment_id=attachment_id,
+            user_id=user_id,
+            shared=self.is_shared(size),
+        )
+        path = entry / _safe_name(filename)
+        if path.exists() and (time.time() - path.stat().st_mtime) < self._ttl:
+            return path
+        return None
 
     def cleanup(self, now: float | None = None) -> int:
         """Удалить просроченные файлы (TTL истёк). Сколько удалено."""

@@ -160,13 +160,14 @@ def _format_event_html(event: Event) -> str | None:
         issues = [LessonIssue.from_dict(item) for item in (event.issues or [])]
         if issues:
             lines.append("")
-            # детально, что не так — как в «проверке пар за сегодня»
+            issue_lines = []
             for issue in issues:
                 if issue.kind == "missing":
-                    lines.append(describe_missing(issue))
+                    issue_lines.append(describe_missing(issue))
                 else:
-                    lines.append(describe_issue(issue))
-        return "\n".join(lines)
+                    issue_lines.append(describe_issue(issue))
+            lines.append("\n".join(issue_lines))
+        return "\n\n".join(lines)
     if isinstance(event, LessonsCheckResult):
         if event.error:
             return f"🔍 Сверка пар: не получилось — {escape(event.error)}"
@@ -185,12 +186,14 @@ def _format_event_html(event: Event) -> str | None:
             lines.append(empty)
         else:
             lines.append("")
+            issue_lines = []
             for issue in issues:
                 if issue.kind == "missing":
-                    lines.append(describe_missing(issue))
+                    issue_lines.append(describe_missing(issue))
                 else:
-                    lines.append(describe_issue(issue))
-        return "\n".join(lines)
+                    issue_lines.append(describe_issue(issue))
+            lines.append("\n".join(issue_lines))
+        return "\n\n".join(lines)
     return None
 
 
@@ -203,6 +206,14 @@ async def _telegram_id(user_id: int) -> int | None:
         uow = UnitOfWork(session)
         user = await uow.users.get_by_id(user_id)
         return user.telegram_id if user else None
+
+
+async def _user_login(user_id: int) -> str | None:
+    """Логин БАРС пользователя для логов (или None)."""
+    async with session_factory() as session:
+        uow = UnitOfWork(session)
+        creds = await uow.bars_credentials.get_by_user_id(user_id)
+        return creds.login if creds else None
 
 
 async def _send(chat_id: int, text: str, reply_to: int | None = None) -> int | None:
@@ -313,27 +324,38 @@ async def _restore_osep_session(user_id: int, client) -> None:
 async def _send_attachments(
     user_id: int, chat_id: int, reply_to: int, attachments: list[dict]
 ) -> None:
-    """Файлы — отдельным сообщением с ответом на первое сообщение письма."""
+    """Файлы — отдельным сообщением с ответом на первое сообщение письма.
+
+    Если worker уже положил файл в кэш — используем готовый путь, НЕ скачиваем
+    повторно (иначе двойное скачивание и двойное удаление в логах).
+    """
     client = get_osep_client(user_id)
-    # основной путь: файлы уже скачаны worker'ом в общий кэш; если файла нет —
-    # докачиваем сами, но сначала восстанавливаем сессию из БД
     await _restore_osep_session(user_id, client)
     for attachment in attachments:
         attachment_id = str(attachment.get("attachment_id") or "")
         filename = str(attachment.get("filename") or "file")
         size = int(attachment.get("size") or 0)
-        try:
-            path = await _cache.get_or_download(
-                attachment_id=attachment_id or filename,
-                filename=filename,
-                size=size,
-                user_id=user_id,
-                download=lambda a=attachment_id: client.download_attachment(a),
-            )
-        except Exception as error:
-            logger.error("вложение {} не скачалось: {}", filename, error)
-            await _send(chat_id, "⚠️ Не удалось отправить вложения", reply_to)
-            return
+        cached = _cache.get_if_cached(
+            attachment_id=attachment_id or filename,
+            filename=filename,
+            size=size,
+            user_id=user_id,
+        )
+        if cached is not None:
+            path = cached
+        else:
+            try:
+                path = await _cache.get_or_download(
+                    attachment_id=attachment_id or filename,
+                    filename=filename,
+                    size=size,
+                    user_id=user_id,
+                    download=lambda a=attachment_id: client.download_attachment(a),
+                )
+            except Exception as error:
+                logger.error("вложение {} не скачалось: {}", filename, error)
+                await _send(chat_id, "⚠️ Не удалось отправить вложения", reply_to)
+                return
         await send_with_retry(
             lambda p=path, f=filename: _bot.send_document(
                 chat_id,
@@ -348,11 +370,13 @@ async def _notify(user_id: int, text: str, *, summary: str | None = None) -> Non
     if chat_id is None:
         logger.warning("уведомление: нет пользователя id={}", user_id)
         return
-    # для писем задаётся summary (тема/от кого/вложения), иначе — текст целиком
+    login = await _user_login(user_id)
+    tag = f"user={user_id} tg={chat_id}"
+    if login:
+        tag += f" login={login}"
     logger.info(
-        "отправка → user={} tg={} | {}",
-        user_id,
-        chat_id,
+        "отправка → {} | {}",
+        tag,
         summary if summary is not None else text,
     )
     await _send(chat_id, text)

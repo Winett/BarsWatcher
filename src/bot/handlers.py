@@ -114,10 +114,13 @@ async def _load_panel_data(service: str, telegram_id: int) -> dict:
         profile = user.bars_profile
         responsible = bool(profile and profile.is_journal_responsible)
 
-    available = await _client(service, db_id).check_availability()
+    # доступность из Redis-трекера — без прямого HTTP-запроса к сервису
+    kind = ServiceKind(service) if isinstance(service, str) else service
+    available, available_since = await _service_status(kind)
     return {
         "watching": watching,
         "available": available,
+        "available_since": available_since,
         "last_check": last_check,
         "login": login,
         "responsible": responsible,
@@ -166,11 +169,15 @@ async def _notify_new_user(message: Message) -> None:
             return
         user = message.from_user
         name = f"@{user.username}" if user.username else user.full_name
+        parts = [f"🆕 Новый пользователь: {name}"]
+        parts.append(f"telegram_id: {user.id}")
+        if user.first_name:
+            parts.append(f"first_name: {user.first_name}")
+        if user.last_name:
+            parts.append(f"last_name: {user.last_name}")
         from src.services.admins import notify_admins
 
-        await notify_admins(
-            message.bot, f"🆕 Новый пользователь: {name} (id={user.id})"
-        )
+        await notify_admins(message.bot, "\n".join(parts))
     except Exception as error:
         logger.error("не удалось уведомить админов о новом пользователе: {}", error)
 
@@ -247,6 +254,17 @@ async def _start_auth(
     callback: CallbackQuery, state: FSMContext, service: str, user_id: int
 ) -> None:
     """Включить отслеживание: авторизация сохранёнными кредами или ввод новых."""
+    # проверяем доступность сервиса ДО попытки авторизации (без прямого запроса)
+    kind = ServiceKind(service) if isinstance(service, str) else service
+    up, _ = await _service_status(kind)
+    if not up:
+        title = panels.service_title(service)
+        await callback.answer(
+            f"⚠️ {title} временно недоступен, попробуйте позже",
+            show_alert=True,
+        )
+        return
+
     async with session_factory() as session:
         uow = UnitOfWork(session)
         db_id = await _db_user_id(user_id, uow)
@@ -513,6 +531,12 @@ async def bars_pairs_check(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == "bars:lessons")
 async def bars_lessons_check(callback: CallbackQuery) -> None:
     """Сверка пар журнала с расписанием с начала семестра (для ответственного)."""
+    # rate limit: не чаще раза в минуту (дорогая операция)
+    redis = await get_redis()
+    lock_key = f"lessons_lock:{callback.from_user.id}"
+    if not await redis.set(lock_key, "1", nx=True, ex=60):
+        await callback.answer("⏳ Сверка уже запущена, подождите минуту", show_alert=True)
+        return
     db_id = await _db_user_id(callback.from_user.id)
     await publish(LessonsCheckRequested(user_id=db_id, days=0))
     await callback.answer("Сверяю пары с начала семестра…")

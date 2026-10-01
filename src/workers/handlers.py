@@ -185,7 +185,7 @@ async def on_auth_2fa_submitted(event: Auth2FASubmitted) -> None:
         if result.status == AuthStatus.OK:
             state.status = WatchStates.ACTIVE
             state.last_error_message = None
-            if await uow.bars_profile.get_by_user_id(event.user_id) is None:
+            if _profile_stale(await uow.bars_profile.get_by_user_id(event.user_id)):
                 try:
                     await _save_profile(uow, event.user_id, await client.fetch_profile())
                 except (ServiceUnavailableError, AuthError, DataParseError) as error:
@@ -299,8 +299,8 @@ async def check_marks(user_id: int) -> None:
                 return
             _save_session(state, client)
 
-        # профиль (ФИО/группа/ответственный за журнал) — один раз
-        if await uow.bars_profile.get_by_user_id(user_id) is None:
+        # профиль (ФИО/группа/ответственный за журнал) — обновляем раз в сутки
+        if _profile_stale(await uow.bars_profile.get_by_user_id(user_id)):
             try:
                 await _save_profile(uow, user_id, await client.fetch_profile())
             except (ServiceUnavailableError, AuthError, DataParseError) as error:
@@ -723,6 +723,21 @@ async def _report_availability(
         transition.since.isoformat(),
     )
 
+
+def _profile_stale(row) -> bool:
+    """Профиль БАРС пора обновить: нет записи или данные старше суток.
+
+    ФИО/группа/ответственный могут меняться (перевод, смена старосты) —
+    подтягиваем периодически, а не только при первой регистрации.
+    """
+    if row is None:
+        return True
+    updated = getattr(row, "updated_at", None)
+    if updated is None:
+        return True
+    if updated.tzinfo is None:
+        updated = updated.replace(tzinfo=UTC)
+    return datetime.now(UTC) - updated > timedelta(hours=24)
 
 async def _save_profile(uow, user_id: int, profile: dict) -> None:
     from src.db.models import BarsProfile
