@@ -11,6 +11,7 @@ import re
 from datetime import date
 
 from bs4 import BeautifulSoup
+from loguru import logger
 
 from src.integrations.models import (
     AbsenceRecord,
@@ -178,7 +179,11 @@ def extract_2fa_tid(html: str) -> str | None:
 
 
 def parse_student_brief(html: str) -> StudentBrief:
-    """Студент из tbl__PartialListStudent: studentID + ФИО."""
+    """Студент из tbl__PartialListStudent: studentID + ФИО + группа.
+
+    Группа берётся из 4-го столбца (доступна всем, в отличие от
+    StudyGroup/ListStudyGroup — там доступ только у старост/замов).
+    """
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table", id="tbl__PartialListStudent")
     if table is None:
@@ -191,9 +196,14 @@ def parse_student_brief(html: str) -> StudentBrief:
     if link is None:
         return StudentBrief()
     match = STUDENT_ID_RE.search(link.get("href") or "")
+    cells = row.find_all("td") if row is not None else []
+    group = None
+    if len(cells) >= 4:
+        group = normalize(cells[3].get_text()) or None
     return StudentBrief(
         student_id=match.group(1) if match else None,
         fio=normalize(link.get_text()) or None,
+        group=group,
     )
 
 
@@ -340,17 +350,24 @@ def parse_study_group(html: str) -> StudyGroupInfo:
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table", id="tbl__PartialListStudyGroup")
     if table is None:
+        logger.warning("parse_study_group: таблица tbl__PartialListStudyGroup не найдена")
         return StudyGroupInfo()
     tbody = table.find("tbody")
     row = tbody.find("tr") if tbody is not None else None
     link = row.find("a") if row is not None else None
     if link is None:
+        logger.warning("parse_study_group: нет ссылки в первой строке таблицы")
         return StudyGroupInfo()
     match = SG_ID_RE.search(link.get("href") or "")
-    return StudyGroupInfo(
+    result = StudyGroupInfo(
         sg_id=match.group(1) if match else None,
         name=normalize(link.get_text()) or None,
     )
+    if not result.sg_id:
+        logger.warning("parse_study_group: sg_id не найден в href={}", link.get("href"))
+    if not result.name:
+        logger.warning("parse_study_group: название группы пустое")
+    return result
 
 
 def parse_leaders(html: str) -> list[str]:

@@ -89,10 +89,15 @@ class AbsenceRecord:
 
 @dataclass
 class StudentBrief:
-    """Студент из списка (studentID + ФИО)."""
+    """Студент из списка (studentID + ФИО + группа).
+
+    Группа берётся из ListStudent (4-й столбец) — доступно всем,
+    в отличие от StudyGroup/ListStudyGroup (только старостам/замам).
+    """
 
     student_id: str | None = None
     fio: str | None = None
+    group: str | None = None
 
 
 @dataclass

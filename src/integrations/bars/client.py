@@ -100,6 +100,8 @@ class BarsWebClient:
         )
 
     async def fetch_profile(self) -> StudentProfile:
+        # группа берётся из ListStudent (доступно всем студентам);
+        # ListStudyGroup — только для sg_id/лидеров (старосты и замы)
         brief = await self._with_relogin(self._api.get_student_page, parse_student_brief)
         group = await self._with_relogin(self._api.get_study_group_page, parse_study_group)
         responsible = False
@@ -112,7 +114,7 @@ class BarsWebClient:
             )
         return StudentProfile(
             fio=brief.fio,
-            group=group.name,
+            group=brief.group or group.name,
             is_journal_responsible=responsible,
         )
 
@@ -172,10 +174,9 @@ class BarsWebClient:
         self, date_from: date, date_to: date, group_name: str | None = None
     ) -> list[ScheduleItem]:
         if group_name is None:
-            group = await self._with_relogin(
-                self._api.get_study_group_page, parse_study_group
-            )
-            group_name = group.name
+            # название группы из ListStudent — доступно всем, не только старостам
+            brief = await self._with_relogin(self._api.get_student_page, parse_student_brief)
+            group_name = brief.group
         if not group_name:
             raise AuthError("не удалось определить название группы")
         return await self._with_relogin(
