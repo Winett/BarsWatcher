@@ -59,8 +59,8 @@ worker переводит пользователя в WAITING_2FA и запра�
 **Форма снимка оценок** (`fetch_marks`):
 `{дисциплина: DisciplineMarks}` — `marks` (КМ-1..N с датами и переписываниями),
 `score` («Балл текущего контроля», например «5,00»), `mark_pa`, `mark_final`.
-Diff — `diff_bars_marks` (new_mark / mark_changed / rewriting / score_changed /
-final_changed / pa_changed).
+Diff — `diff_bars_marks` (new_mark / mark_changed / rewriting / final_changed /
+pa_changed); изменение `score` событий не порождает (производная величина).
 
 **Даты/время в моделях**: структурированно — `date` = ISO («2026-09-21»),
 `time_start`/`time_end` = «HH:MM», `pair`/`week` = int; исходные строки

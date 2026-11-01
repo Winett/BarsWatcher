@@ -141,6 +141,10 @@ class SimBarsClient:
 
     # ── данные: настоящие HTML-ответы из simdata/bars/ ─────────────────
 
+    async def is_journal_responsible(self) -> bool:
+        leaders = parser.parse_leaders(_read_response(RESPONSE_LEADERS))
+        return self._login in leaders
+
     async def fetch_profile(self) -> StudentProfile:
         brief = parser.parse_student_brief(_read_response(RESPONSE_PROFILE))
         group = parser.parse_study_group(_read_response(RESPONSE_GROUP))

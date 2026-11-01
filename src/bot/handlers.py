@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 from aiogram import F, Router
@@ -31,7 +32,7 @@ from src.db.models import (
 )
 from src.events import get_redis, publish
 from src.events.contracts import CheckRequested, LessonsCheckRequested
-from src.integrations import AuthError, AuthStatus, get_bars_client, get_osep_client
+from src.integrations import AuthError, AuthResult, AuthStatus, get_bars_client, get_osep_client
 from src.repositories.uow import UnitOfWork
 from src.services.admins import admin_telegram_ids
 
@@ -43,6 +44,7 @@ __all__ = ["build_router"]
 router = Router()
 
 CODE_TTL = timedelta(minutes=5)  # сколько живёт ввод кода 2FA
+AUTH_TIMEOUT = 90.0  # потолок на авторизацию с ретраями внутри клиента
 _SERVICES = {"bars": ServiceKind.BARS, "osep": ServiceKind.OSEP}
 
 # клиенты живут в процессе бота: 2FA-флоу требует одного и того же клиента
@@ -170,7 +172,8 @@ async def _notify_new_user(message: Message) -> None:
         user = message.from_user
         name = f"@{user.username}" if user.username else user.full_name
         parts = [f"🆕 Новый пользователь: {name}"]
-        parts.append(f"telegram_id: {user.id}")
+        # <code> — id моноширинный и копируется тапом (parse_mode=HTML у бота)
+        parts.append(f"telegram_id: <code>{user.id}</code>")
         if user.first_name:
             parts.append(f"first_name: {user.first_name}")
         if user.last_name:
@@ -250,6 +253,31 @@ async def panel_action(callback: CallbackQuery, state: FSMContext) -> None:
         return
 
 
+async def _authenticate_client(service: str, client, login: str, password: str):
+    """Авторизация с потолком времени; ошибка сервиса — не «неверные креды».
+
+    Возвращает AuthResult. При таймауте/сбое клиента возвращаем результат с
+    явным текстом ошибки (НЕ INVALID_CREDENTIALS), чтобы UI не зависал на
+    «Попытка авторизоваться» и не врал про неверный пароль.
+    """
+    try:
+        return await asyncio.wait_for(
+            client.authenticate(login, password), timeout=AUTH_TIMEOUT
+        )
+    except TimeoutError:
+        logger.error("авторизация {} превысила таймаут ({}с)", service, AUTH_TIMEOUT)
+        return AuthResult(
+            AuthStatus.OK,
+            error="Сервис не ответил за отведённое время — попробуйте позже",
+        )
+    except Exception as error:  # noqa: BLE001 — UI не должно падать на ошибке клиента
+        logger.error("авторизация {} не удалась (ошибка клиента): {}", service, error)
+        return AuthResult(
+            AuthStatus.OK,
+            error="Сервис временно недоступен — попробуйте позже",
+        )
+
+
 async def _start_auth(
     callback: CallbackQuery, state: FSMContext, service: str, user_id: int
 ) -> None:
@@ -285,7 +313,23 @@ async def _start_auth(
     await callback.message.edit_text("Попытка авторизоваться…")
     client = _client(service, db_id)
     await _restore_session(service, db_id, client)
-    result = await client.authenticate(login, password)
+
+    # сначала пробуем живые куки: обычный запрос (БАРС — профиль, ОСЭП — папки).
+    # Если сессия жива — авторизация не нужна; если мертва — идём авторизоваться.
+    alive = False
+    try:
+        if service == "bars":
+            await client.fetch_profile()
+        else:
+            await client.fetch_folder_counts()
+        alive = True
+    except Exception:
+        alive = False  # сессия слетела или сервис сбоит — авторизуемся заново
+
+    if alive:
+        result = AuthResult(AuthStatus.OK)
+    else:
+        result = await _authenticate_client(service, client, login, password)
     await _save_session(service, db_id, client)
     await _after_auth(
         callback.message, state, service, user_id, db_id, result, client, callback
@@ -368,7 +412,7 @@ async def on_password(message: Message, state: FSMContext) -> None:
 
     status_message = await message.answer("Попытка авторизоваться…")
     client = _client(service, db_id)
-    result = await client.authenticate(login, password)
+    result = await _authenticate_client(service, client, login, password)
     await _save_session(service, db_id, client)
     await _after_auth(
         status_message, state, service, message.from_user.id, db_id, result, client
@@ -384,13 +428,35 @@ async def two_fa_action(callback: CallbackQuery, state: FSMContext) -> None:
     db_id = await _db_user_id(callback.from_user.id)
 
     if action == "input":
+        client = _client(service, db_id)
+        # ожидающее 2FA-состояние могло быть создано worker'ом — восстанавливаем
+        await _restore_session(service, db_id, client)
+        # код мог не отправиться (сессия слетела) — отправляем при вводе,
+        # иначе пользователь вводит код, которого нет
+        destination = None
+        try:
+            send_result = await client.send_2fa_code()
+            destination = send_result.destination
+        except AuthError:
+            pass  # состояние истекло — поможет «Отправить код снова»
+        except Exception as error:
+            logger.error("не удалось отправить код 2FA при вводе: {}", error)
+        await _save_session(service, db_id, client)
+
         await state.set_state(TwoFAFlow.waiting_code)
-        await state.update_data(
-            service=service, code_requested_at=datetime.now(UTC).isoformat()
-        )
-        data = await state.get_data()
-        where = data.get("code_destination")
-        hint = f" (код отправлен: {where})" if where else ""
+        where = destination or None
+        if where:
+            await state.update_data(
+                service=service,
+                code_requested_at=datetime.now(UTC).isoformat(),
+                code_destination=where,
+            )
+            hint = f" (код отправлен: {where})"
+        else:
+            await state.update_data(
+                service=service, code_requested_at=datetime.now(UTC).isoformat()
+            )
+            hint = ""
         await callback.message.edit_text(
             f"Введите код 2FA{hint}:",
             reply_markup=kb.two_fa_input_kb(service),
@@ -793,7 +859,7 @@ async def _forward_feedback(message: Message, kind: str) -> bool:
     for admin_id in ids:
         try:
             await message.bot.send_message(
-                admin_id, f"{kind} от {name} (id={user.id}):"
+                admin_id, f"{kind} от {name} (id=<code>{user.id}</code>):"
             )
             await message.copy_to(admin_id)
         except Exception as error:

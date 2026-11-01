@@ -24,8 +24,8 @@ from src.integrations.ports import (
 from .api import BarsApi
 from .auth import BarsAuth, SessionExpired
 from .parser import (
+    access_forbidden,
     parse_absences,
-    parse_leaders,
     parse_lessons,
     parse_marks,
     parse_schedule,
@@ -99,19 +99,29 @@ class BarsWebClient:
             parse_absences,
         )
 
+    async def is_journal_responsible(self) -> bool:
+        """Является ли пользователь ответственным за журнал группы.
+
+        Источник права — доступ к StudyGroup/EditStudyGroup: неответственным
+        БАРС отдаёт страницу «Доступ запрещён». Ошибка сервера (сеть/5xx) —
+        ServiceUnavailableError, НЕ «нет прав» (не путаем одно с другим).
+        """
+        group = await self._with_relogin(self._api.get_study_group_page, parse_study_group)
+        if not group.sg_id:
+            # не удалось определить группу — считаем неответственным (мягко)
+            log.warning("не удалось определить sg_id для проверки ответственного")
+            return False
+        html = await self._with_relogin(
+            lambda: self._api.get_study_group_edit_page(group.sg_id), lambda h: h
+        )
+        return not access_forbidden(html)
+
     async def fetch_profile(self) -> StudentProfile:
         # группа берётся из ListStudent (доступно всем студентам);
-        # ListStudyGroup — только для sg_id/лидеров (старосты и замы)
+        # право ответственного — по доступу к EditStudyGroup (см. is_journal_responsible)
         brief = await self._with_relogin(self._api.get_student_page, parse_student_brief)
         group = await self._with_relogin(self._api.get_study_group_page, parse_study_group)
-        responsible = False
-        if group.sg_id:
-            leaders = await self._with_relogin(
-                lambda: self._api.get_leaders_page(group.sg_id), parse_leaders
-            )
-            responsible = any(
-                login.lower() == (self._login or "").lower() for login in leaders
-            )
+        responsible = await self.is_journal_responsible()
         return StudentProfile(
             fio=brief.fio,
             group=brief.group or group.name,

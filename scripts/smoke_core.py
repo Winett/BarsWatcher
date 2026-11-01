@@ -259,6 +259,15 @@ check(
 
 check(
     diff_bars_marks(
+        {"Мат": {"marks": [km("4")], "score": "2,50"}},
+        {"Мат": {"marks": [km("4")], "score": "5,00"}},
+    )
+    == [],
+    "изменение балла текущего контроля не порождает событий",
+)
+
+check(
+    diff_bars_marks(
         {"Мат": disc([km("4")])},
         {"Мат": disc([km("4")]), "Новая дисциплина": disc([km("5")])},
     )
@@ -428,7 +437,29 @@ def notification_checks() -> None:
             }
         ],
     )
-    check("📗 Новая оценка" in format_event(appeared), "появление — «Новая оценка»")
+    check(
+        format_event(appeared)
+        == "📝 Новая оценка\n\nОценка по Мат, Иванов И.И., экзамен КМ-1: 5",
+        "появление — прежний формат «📝 Новая оценка»",
+    )
+
+    score_only = MarksChanged(
+        user_id=1,
+        changes=[
+            {
+                "subject": "Мат, Иванов И.И., экзамен",
+                "kind": "score_changed",
+                "km": None,
+                "old": "2,50",
+                "new": "5,00",
+                "date": None,
+            }
+        ],
+    )
+    check(
+        format_event(score_only) is None,
+        "«Балл текущего контроля» не уведомляется",
+    )
 
 
 notification_checks()

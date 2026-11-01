@@ -123,6 +123,29 @@ async def on_lessons_check(event: LessonsCheckRequested) -> None:
         # пагинация 500: занятия журнала за период (докачка страниц)
         lessons = await client.fetch_lessons_range(date_from, date_to)
         schedule = await client.fetch_schedule(date_from, date_to)
+    except AuthError as error:
+        # «нет прав / доступ запрещён» — отзываем право ответственного
+        # (это НЕ ошибка сервера: сервер ответил и запретил доступ)
+        if "доступ запрещ" in str(error).lower() or "access denied" in str(error).lower():
+            async with session_factory() as session:
+                uow = UnitOfWork(session)
+                row = await uow.bars_profile.get_by_user_id(event.user_id)
+                if row is not None and row.is_journal_responsible:
+                    row.is_journal_responsible = False
+                    await uow.commit()
+                    log.info(
+                        "отозвано право ответственного (нет прав доступа) | user={}",
+                        event.user_id,
+                    )
+        await publish(
+            LessonsCheckResult(
+                user_id=event.user_id,
+                period=period,
+                days=event.days,
+                error="нет доступа к журналу (возможно, вы не ответственный за журнал)",
+            )
+        )
+        return
     except Exception as error:
         await publish(
             LessonsCheckResult(
@@ -185,6 +208,18 @@ async def on_auth_2fa_submitted(event: Auth2FASubmitted) -> None:
         if result.status == AuthStatus.OK:
             state.status = WatchStates.ACTIVE
             state.last_error_message = None
+            # после 2FA тоже обновляем право «ответственный за журнал»
+            try:
+                responsible = await client.is_journal_responsible()
+                row = await uow.bars_profile.get_by_user_id(event.user_id)
+                if row is not None and row.is_journal_responsible != responsible:
+                    row.is_journal_responsible = responsible
+                    log.info(
+                        "право ответственного обновлено → {} | user={}",
+                        responsible, event.user_id,
+                    )
+            except (ServiceUnavailableError, AuthError) as error:
+                log.warning("право ответственного не обновлено: {}", error)
             if _profile_stale(await uow.bars_profile.get_by_user_id(event.user_id)):
                 try:
                     await _save_profile(uow, event.user_id, await client.fetch_profile())
@@ -298,6 +333,21 @@ async def check_marks(user_id: int) -> None:
                 await _on_auth_failed(uow, state, now, user_id, ServiceKind.BARS)
                 return
             _save_session(state, client)
+
+        # при каждой удачной авторизации обновляем право «ответственный за
+        # журнал» (мало средств: один запрос EditStudyGroup); ошибка сервера
+        # здесь — ServiceUnavailableError, «нет прав» — False, не путаем
+        try:
+            responsible = await client.is_journal_responsible()
+            row = await uow.bars_profile.get_by_user_id(user_id)
+            if row is not None and row.is_journal_responsible != responsible:
+                row.is_journal_responsible = responsible
+                log.info(
+                    "право ответственного обновлено → {} | user={}",
+                    responsible, user_id,
+                )
+        except (ServiceUnavailableError, AuthError) as error:
+            log.warning("право ответственного не обновлено: {}", error)
 
         # профиль (ФИО/группа/ответственный за журнал) — обновляем раз в сутки
         if _profile_stale(await uow.bars_profile.get_by_user_id(user_id)):

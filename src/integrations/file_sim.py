@@ -171,6 +171,10 @@ class FileSimBarsClient:
         result = AuthResult(status=AuthStatus.OK)
         return result
 
+    async def is_journal_responsible(self) -> bool:
+        data = _load("bars_profile.json")
+        return bool(data.get("is_journal_responsible", False))
+
     async def fetch_profile(self) -> StudentProfile:
         data = _load("bars_profile.json")
         return StudentProfile(

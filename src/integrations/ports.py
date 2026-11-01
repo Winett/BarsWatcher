@@ -110,6 +110,10 @@ class BarsClient(Protocol):
         """Проверить введённый код: OK / CODE_INVALID."""
         ...
 
+    async def is_journal_responsible(self) -> bool:
+        """Ответственный ли пользователь за журнал группы (по праву доступа)."""
+        ...
+
     async def fetch_profile(self) -> StudentProfile:
         """ФИО, группа, ответственный за журнал."""
         ...

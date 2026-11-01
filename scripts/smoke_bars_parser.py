@@ -31,6 +31,7 @@ def check(condition: bool, label: str) -> None:
 
 
 from src.integrations.bars.parser import (
+    access_forbidden,
     extract_2fa_tid,
     extract_token,
     parse_absences,
@@ -88,6 +89,18 @@ LEADERS_PAGE = """
 check(
     parse_leaders(LEADERS_PAGE) == ["AkimovNA", "PetrovPP"],
     "ответственные за журнал (логины без public\\)",
+)
+
+# ── право «ответственный за журнал» (EditStudyGroup доступ / запрещён) ────────
+ACCESS_DENIED_PAGE = "<html><body><h1>Доступ запрещён</h1></body></html>"
+check(access_forbidden(ACCESS_DENIED_PAGE), "страница «Доступ запрещён» распознана")
+check(
+    access_forbidden("<html><body>Access Denied</body></html>"),
+    "страница Access Denied (en) распознана",
+)
+check(
+    not access_forbidden(GROUP_PAGE),
+    "обычная страница группы не считается «доступ запрещён»",
 )
 
 # ── оценки ────────────────────────────────────────────────────────────────────

@@ -21,14 +21,35 @@ services:
       retries: 12
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.0.15-alpine
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    # RDB-снимки отключены полностью: их фоновое сохранение падало (диск /
+    # память) и блокировало ВСЮ запись (MISCONF / stop-writes-on-bgsave-error).
+    # Персистентность — только AOF (appendonly), запись не блокируется.
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--save",
+        "",
+        "--stop-writes-on-bgsave-error",
+        "no",
+      ]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # одноразовый запуск миграций перед стартом bot/worker
   migrate:
@@ -82,3 +103,4 @@ services:
 
 volumes:
   pgdata:
+  redis_data:

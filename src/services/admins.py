@@ -201,9 +201,11 @@ async def notify_admins(bot, text: str) -> None:
     if not ids:
         log.warning("уведомление админам: некому отправлять (админов нет) | {}", text)
         return
+    ok = 0
     for telegram_id in ids:
         try:
             await bot.send_message(telegram_id, text)
+            ok += 1
         except Exception as error:
             log.error("не удалось уведомить админа {}: {}", telegram_id, error)
-    log.info("уведомление админам ({} шт.) | {}", len(ids), text)
+    log.info("уведомление админам ({} из {} шт.) | {}", ok, len(ids), text)

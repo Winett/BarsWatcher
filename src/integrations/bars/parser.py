@@ -36,6 +36,7 @@ __all__ = [
     "parse_absences",
     "parse_study_group",
     "parse_leaders",
+    "access_forbidden",
     "current_semester_title",
     "parse_training_journal_id",
     "parse_lessons",
@@ -176,6 +177,17 @@ def extract_2fa_tid(html: str) -> str | None:
     if len(parts) >= 3:
         return parts[-2]
     return None
+
+
+def access_forbidden(html: str) -> bool:
+    """Страница «Доступ запрещён» (не ответственный за журнал не может открыть
+    StudyGroup/EditStudyGroup). Тексты — на русском и английском."""
+    text = html.lower()
+    return (
+        "доступ запрещён" in text
+        or "access denied" in text
+        or "у вас нет прав" in text
+    )
 
 
 def parse_student_brief(html: str) -> StudentBrief:

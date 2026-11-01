@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from pathlib import Path
 
@@ -39,6 +40,9 @@ from .parser import extract_2fa_tid, extract_token
 __all__ = ["BarsAuth", "SessionExpired"]
 
 log = logger.bind(component="bars-auth")
+
+AUTH_ATTEMPTS = 2  # попытки входа: если сервис «заглючил» — пробуем ещё раз
+AUTH_ATTEMPT_TIMEOUT = 40.0  # жёсткий потолок одной попытки (сек)
 
 
 def _raise_for_status(response: httpx.Response, what: str) -> None:
@@ -194,20 +198,51 @@ class BarsAuth:
         return response.status_code == 200
 
     async def authenticate(self, login: str, password: str) -> AuthResult:
+        """Вход в БАРС с потолком времени и одним повтором при сбое сервиса.
+
+        Потолок одной попытки — AUTH_ATTEMPT_TIMEOUT (не даём зависнуть на
+        «Попытка авторизоваться»). Неверными креды считаем ТОЛЬКО явную ошибку
+        сервера; серверный сбой/таймаут → ретраи, иначе — ошибка сервиса.
+        """
         if not login or not password:
             # пустые креды — частая причина «вход не удался», ловим явно
             raise AuthError(
                 f"пустые креды: login={login!r} (длина {len(login)}), "
                 f"пароль задан: {bool(password)}"
             )
-        log.info(
-            "БАРС: попытка входа | login={!r} (длина {}), пароль: {} симв.",
-            login,
-            len(login),
-            len(password),
-        )
-        self._client.cookies.clear()
         self._account = login
+
+        last_error: Exception | None = None
+        for attempt in range(1, AUTH_ATTEMPTS + 1):
+            log.info(
+                "БАРС: попытка входа {} | login={!r} (длина {}), пароль: {} симв.",
+                attempt, login, len(login), len(password),
+            )
+            try:
+                result = await asyncio.wait_for(
+                    self._attempt_login(login, password),
+                    timeout=AUTH_ATTEMPT_TIMEOUT,
+                )
+            except (
+                ServiceUnavailableError,
+                AuthError,
+                DataParseError,
+                TimeoutError,
+            ) as error:
+                # сервис сбоит / форма не та / таймаут — НЕ «неверные креды»
+                last_error = error
+                log.warning("БАРС: попытка {} не удалась ({})", attempt, error)
+                continue
+            return result
+
+        assert last_error is not None
+        raise ServiceUnavailableError(
+            f"БАРС: вход не удался после {AUTH_ATTEMPTS} попыток: {last_error}"
+        ) from last_error
+
+    async def _attempt_login(self, login: str, password: str) -> AuthResult:
+        """Одна попытка входа: GET страницы → POST кредов → разбор ответа."""
+        self._client.cookies.clear()
         try:
             response = await self._client.get(f"{self.APP}/")
             _raise_for_status(response, "страница входа")

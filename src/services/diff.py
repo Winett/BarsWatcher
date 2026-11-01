@@ -3,16 +3,15 @@
 Снимок оценок (см. ports.BarsClient.fetch_marks):
     {дисциплина: {
         "marks": [{"mark", "date", "rewriting": [{"mark", "date"}]}, ...],  # КМ-1..N
-        "score": str,       # балл текущего контроля
+        "score": str,       # балл текущего контроля (в diff не участвует)
         "mark_pa": str,     # оценка ПА («Промежуточная аттестация»)
         "mark_final": str,  # итоговая оценка
     }}
 
 Элементы изменений оценок (MarksChanged.changes):
     {"subject", "kind", "km", "old", "new", "date"}
-    kind: new_mark | mark_changed | rewriting | score_changed | final_changed |
-          pa_changed;
-    km — номер контрольного мероприятия (для score/final/pa отсутствует).
+    kind: new_mark | mark_changed | rewriting | final_changed | pa_changed;
+    km — номер контрольного мероприятия (для final/pa отсутствует).
 
 Снимок пропусков (fetch_absences): {ключ: {"lesson", "created", "changed"}}.
 Элементы изменений (AbsencesChanged.changes):
@@ -32,12 +31,15 @@ __all__ = [
     "SEMESTER_KEY",
 ]
 
+# «Балл текущего контроля» — производная величина: когда наступает новая
+# неделя, непроставленные пары считаются нулевыми и балл «падает» сам по себе.
+# Поэтому его вовсе не отслеживаем: изменения балла не порождают событий.
+
 _MARK_KINDS = frozenset(
     {
         "new_mark",
         "mark_changed",
         "rewriting",
-        "score_changed",
         "final_changed",
         "pa_changed",
     }
@@ -53,7 +55,8 @@ def diff_bars_marks(old: dict | None, new: dict) -> list[dict]:
       * оценка на том же месте просто поменялась, ничего не добавилось
         → mark_changed;
       * добавилась новая оценка (список переписываний вырос) → rewriting;
-      * изменение итоговой/ПА/балла → final_changed / pa_changed / score_changed.
+      * изменение итоговой/ПА → final_changed / pa_changed;
+      * изменение балла текущего контроля → игнорируется (производная величина).
 
     Если у дисциплины в новом снимке нет ни одной строки КМ (страница не
     разобрана) — не считаем изменением; пустые ячейки КМ при наличии строк
@@ -170,17 +173,6 @@ def diff_bars_marks(old: dict | None, new: dict) -> list[dict]:
                         }
                     )
 
-        if (old_values.get("score") or "") != (values.get("score") or ""):
-            changes.append(
-                {
-                    "subject": subject,
-                    "kind": "score_changed",
-                    "km": None,
-                    "old": old_values.get("score") or None,
-                    "new": values.get("score") or None,
-                    "date": None,
-                }
-            )
         if (old_values.get("mark_final") or "") != (values.get("mark_final") or ""):
             changes.append(
                 {
@@ -203,6 +195,7 @@ def diff_bars_marks(old: dict | None, new: dict) -> list[dict]:
                     "date": None,
                 }
             )
+
     return changes
 
 

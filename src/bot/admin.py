@@ -138,18 +138,124 @@ _MENU_TEXT = (
     "/simup, /simdown bars|osep|all — тест доступности сервисов"
 )
 
+_TEST_MENU_TEXT = (
+    "🧪 <b>Тестирование (только sim/file)</b>\n\n"
+    "Проверка функционала: запрос, разлогин (БАРС), доступность сервисов.\n\n"
+    "Кнопки действуют на ваш аккаунт (или сервис целиком для доступности)."
+)
+
 
 def _menu_kb() -> InlineKeyboardMarkup:
+    rows = [
+        [_btn("⚙️ Глобальные настройки", "adm:glob")],
+        [_btn("👤 Пользователи", "adm:users")],
+        [_btn("🛡 Администраторы", "adm:admins")],
+        [_btn("🔔 Уведомления админам", "adm:notif")],
+        [_btn("📣 Рассылка", "adm:bcast")],
+        [_btn("📜 Логи", "adm:logs")],
+    ]
+    if settings.integration_mode in ("sim", "file"):
+        rows.append([_btn("🧪 Тестирование", "adm:test")])
+    return _kb(rows)
+
+
+def _test_kb() -> InlineKeyboardMarkup:
     return _kb(
         [
-            [_btn("⚙️ Глобальные настройки", "adm:glob")],
-            [_btn("👤 Пользователи", "adm:users")],
-            [_btn("🛡 Администраторы", "adm:admins")],
-            [_btn("🔔 Уведомления админам", "adm:notif")],
-            [_btn("📣 Рассылка", "adm:bcast")],
-            [_btn("📜 Логи", "adm:logs")],
+            [_btn("🔁 Запрос сейчас", "adm:test:req")],
+            [
+                _btn("🔓 Разлогиниться (БАРС)", "adm:test:logout"),
+                _btn("🔄 Доступность", "adm:test:avail"),
+            ],
+            [_btn("◀️ В админку", "adm:menu")],
         ]
     )
+
+
+async def _test_panel(callback: CallbackQuery) -> None:
+    from src.events import get_redis
+    from src.services.availability import AvailabilityTracker
+
+    redis = await get_redis()
+    tracker = AvailabilityTracker(redis)
+    bars_up, _ = await tracker.get_status("bars")
+    osep_up, _ = await tracker.get_status("osep")
+    lines = [
+        _TEST_MENU_TEXT,
+        f"\nТекущая доступность: БАРС {'🟢' if bars_up else '🔴'}, "
+        f"ОСЭП {'🟢' if osep_up else '🔴'}",
+    ]
+    await _safe_edit(callback.message, "\n".join(lines), _test_kb())
+
+
+async def _admin_test_action(callback: CallbackQuery, action: str) -> None:
+    from src.events import CheckRequested, get_redis, publish
+    from src.integrations import get_bars_client
+    from src.services.availability import AvailabilityTracker
+
+    if settings.integration_mode == "real":
+        await callback.answer("Тестовые кнопки — только в sim/file", show_alert=True)
+        return
+
+    tg_id = callback.from_user.id
+
+    if action == "menu":
+        await _test_panel(callback)
+        await callback.answer()
+        return
+
+    if action == "req":
+        # обычный запрос: публикуем CheckRequested, как это делает бот всегда
+        from src.db.models import ServiceKind
+
+        async with session_factory() as session:
+            uow = UnitOfWork(session)
+            user = await uow.users.get_by_telegram_id(tg_id)
+            if user is None:
+                await callback.answer("Пользователь не найден", show_alert=True)
+                return
+            db_id = user.id
+        await publish(CheckRequested(user_id=db_id, service=ServiceKind.BARS))
+        await publish(CheckRequested(user_id=db_id, service=ServiceKind.OSEP))
+        await callback.answer("Запрос отправлен (БАРС и ОСЭП)")
+
+    elif action == "logout":
+        # сбросить авторизацию БАРС и сделать запрос — проверка «слёта»
+        from src.db.models import ServiceKind
+
+        async with session_factory() as session:
+            uow = UnitOfWork(session)
+            user = await uow.users.get_by_telegram_id(tg_id, with_bars_state=True)
+            if user is None:
+                await callback.answer("Пользователь не найден", show_alert=True)
+                return
+            state = getattr(user, "bars_state", None)
+            db_id = user.id
+            if state is not None:
+                state.cookies = {}
+                if hasattr(state, "pending_2fa"):
+                    state.pending_2fa = None
+                await uow.commit()
+        # клиенту тоже сбрасываем сессию в памяти
+        client = get_bars_client(db_id)
+        client.restore_session({"cookies": {}, "pending_2fa": None})
+        await publish(CheckRequested(user_id=db_id, service=ServiceKind.BARS))
+        await callback.answer("Сессия БАРС сброшена, запрос отправлен")
+
+    elif action == "avail":
+        # переключить доступность сервиса (работает и в real)
+        redis = await get_redis()
+        tracker = AvailabilityTracker(redis)
+        bars_up, _ = await tracker.get_status("bars")
+        new_up = not bool(bars_up)
+        await tracker.report("bars", new_up)
+        await callback.answer(
+            f"БАРС → {'доступен' if new_up else 'НЕ доступен'}", show_alert=True
+        )
+        await _test_panel(callback)
+
+    else:
+        await callback.answer()
 
 
 async def _safe_edit(target: Message, text: str, keyboard: InlineKeyboardMarkup | None) -> None:
@@ -582,6 +688,10 @@ async def admin_callback(callback: CallbackQuery, state: FSMContext) -> None:
     if action == "menu":
         await state.clear()
         await _safe_edit(callback.message, _MENU_TEXT, _menu_kb())
+    elif action == "test":
+        sub = parts[2] if len(parts) > 2 else "menu"
+        await _admin_test_action(callback, sub)
+        return
     elif action == "glob":
         await _globals_panel(callback)
     elif action == "globset":

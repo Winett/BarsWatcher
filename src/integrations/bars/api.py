@@ -73,6 +73,17 @@ class BarsApi:
             params={"sgID": sg_id, "query": json.dumps(query, ensure_ascii=False)},
         )
 
+    async def get_study_group_edit_page(self, sg_id: str) -> str:
+        """Страница редактирования группы: доступна только ответственным.
+
+        Неответственные получают страницу «Доступ запрещён» — по ней и
+        определяется право (не путать с ошибкой сервера).
+        """
+        return await self._get(
+            "/bars_web/SG/StudyGroup/EditStudyGroup",
+            params={"sgID": sg_id},
+        )
+
     # ───────────────────────────── оценки/пропуски ─────────────────────────────
 
     async def get_marks_page(self, student_id: str, semester_id: int | str | None = None) -> str:

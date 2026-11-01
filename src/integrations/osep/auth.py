@@ -8,6 +8,8 @@ Forms-based auth: POST /CookieAuth.dll?Logon (форма curl/flags/formdir),
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 from loguru import logger
 
@@ -15,6 +17,7 @@ from src.integrations.ports import (
     AuthError,
     AuthResult,
     AuthStatus,
+    DataParseError,
     ServiceUnavailableError,
 )
 
@@ -41,6 +44,9 @@ _LOGON_FORM = {
     "isUtf8": "1",
     "trusted": "4",
 }
+
+AUTH_ATTEMPTS = 2  # попытки входа: если сервер «заглючил» — пробуем ещё раз
+AUTH_ATTEMPT_TIMEOUT = 40.0  # жёсткий потолок одной попытки (сек)
 
 
 class OwaAuth:
@@ -86,16 +92,52 @@ class OwaAuth:
         return response.status_code == 200
 
     async def authenticate(self, login: str, password: str) -> AuthResult:
-        """Вход в ОСЭП. Неверные креды = /owa/ снова отдаёт 302 после Logon."""
+        """Вход в ОСЭП. Неверные креды = /owa/ снова отдаёт 302 после Logon.
+
+        Потолок одной попытки — AUTH_ATTEMPT_TIMEOUT (не даём зависнуть на
+        «Попытка авторизоваться»). Если сервис доступен, но попытка не удалась
+        (timeout/5xx) — пробуем ещё раз: мог сбоить сам сервис.
+        """
         if not login or not password:
             raise AuthError(
                 f"пустые креды: login={login!r} (длина {len(login)}), "
                 f"пароль задан: {bool(password)}"
             )
-        logger.info("ОСЭП: вход, account={}", login)
-        self._client.cookies.clear()
         self._credentials = (login, password)
         self._account = login
+
+        last_error: Exception | None = None
+        for attempt in range(1, AUTH_ATTEMPTS + 1):
+            logger.info(
+                "ОСЭП: вход, account={} (попытка {}/{})",
+                login, attempt, AUTH_ATTEMPTS,
+            )
+            try:
+                result = await asyncio.wait_for(
+                    self._attempt_login(login, password),
+                    timeout=AUTH_ATTEMPT_TIMEOUT,
+                )
+            except (ServiceUnavailableError, AuthError, DataParseError) as error:
+                # сервер сбоит / форма не та — это НЕ «неверные креды»
+                last_error = error
+                logger.warning(
+                    "ОСЭП: попытка {} не удалась ({})", attempt, error
+                )
+                continue
+            if result.status is not AuthStatus.OK:
+                # сервис ответил и отклонил креды — ретраи не помогут
+                return result
+            return result
+
+        # все попытки упали на уровне сервиса — не виним креды
+        assert last_error is not None
+        raise ServiceUnavailableError(
+            f"ОСЭП: вход не удался после {AUTH_ATTEMPTS} попыток: {last_error}"
+        ) from last_error
+
+    async def _attempt_login(self, login: str, password: str) -> AuthResult:
+        """Одна попытка входа (без ретраев): warm-up + Logon + проверка /owa/."""
+        self._client.cookies.clear()
         try:
             # warm-up кук + формы
             await self._client.get(OWA_PATH)

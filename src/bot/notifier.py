@@ -12,7 +12,7 @@ from html import escape
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramForbiddenError
-from aiogram.types import FSInputFile
+from aiogram.types import FSInputFile, InputMediaDocument
 from loguru import logger
 
 from src.bot.throttle import send_with_retry
@@ -49,6 +49,7 @@ __all__ = ["register_telegram_notifier", "split_message", "TG_LIMIT"]
 
 TG_LIMIT = 4096
 CHUNK = 4000  # с запасом под лимит Telegram
+MEDIA_GROUP_LIMIT = 10  # Telegram: send_media_group принимает до 10 медиа
 
 _cache = AttachmentCache()
 _bot: Bot | None = None
@@ -73,11 +74,12 @@ def split_message(text: str, limit: int = CHUNK) -> list[str]:
     return parts or [""]
 
 
+# Заголовок новых оценок — прежний формат уведомления (как в старом приложении)
+_NEW_MARK_TITLE = "📝 Новая оценка"
+
 _MARK_KINDS_TEXT = {
-    "new_mark": "📗 Новая оценка",
     "mark_changed": "📘 Оценка изменена",
     "rewriting": "🔁 Переписывание",
-    "score_changed": "⚖️ Балл текущего контроля",
     "final_changed": "🏆 Итоговая оценка",
     "pa_changed": "📊 Промежуточная аттестация",
 }
@@ -97,6 +99,15 @@ def _value(value: str | None, hidden: bool) -> str:
     return f"<tg-spoiler>{text}</tg-spoiler>" if hidden else text
 
 
+def _render_new_mark(change: dict) -> str:
+    """Новая оценка — прежний формат: «Оценка по <дисциплина> КМ-N: 5»."""
+    subject = escape(str(change.get("subject", "?")))
+    km = change.get("km")
+    where = f"{subject} КМ-{km}" if km else subject
+    hidden = bool(change.get("hidden"))
+    return f"Оценка по {where}: {_value(change.get('new'), hidden)}"
+
+
 def _render_mark_change(change: dict) -> str:
     kind = change.get("kind")
     title = _MARK_KINDS_TEXT.get(kind, "Изменение оценки")
@@ -106,23 +117,42 @@ def _render_mark_change(change: dict) -> str:
     hidden = bool(change.get("hidden"))
     old, new = change.get("old"), change.get("new")
 
-    if kind in {"score_changed", "final_changed", "pa_changed"}:
+    if kind in {"final_changed", "pa_changed"}:
         return (
             f"{title}: «{subject}» — "
             f"{_value(old, hidden)} → {_value(new, hidden)}"
-        )
-    if kind == "new_mark":
-        return (
-            f"{title}: {where}: {_value(new, hidden)} "
-            f"({_fmt_date(change.get('date'))})"
         )
     date_part = f" ({_fmt_date(change.get('date'))})" if new else ""
     return f"{title}: {where} — {_value(old, hidden)} → {_value(new, hidden)}{date_part}"
 
 
+def _render_marks(changes: list[dict]) -> str | None:
+    """Сообщение об изменениях оценок.
+
+    Новые оценки — прежним форматом (заголовок «📝 Новая оценка», пустая
+    строка, «Оценка по … КМ-N: 5»). «Балл текущего контроля» не показываем
+    вовсе: это производная величина, шумящая сама по себе.
+    """
+    # score_changed может остаться только в старых событиях, застрявших в
+    # очереди Redis до обновления — такие строки молча пропускаем.
+    new_marks = [c for c in changes if c.get("kind") == "new_mark"]
+    others = [
+        c
+        for c in changes
+        if c.get("kind") not in {"new_mark", "score_changed"}
+    ]
+    parts = []
+    if new_marks:
+        lines = "\n".join(_render_new_mark(c) for c in new_marks)
+        parts.append(f"{_NEW_MARK_TITLE}\n\n{lines}")
+    if others:
+        parts.append("\n".join(_render_mark_change(c) for c in others))
+    return "\n\n".join(parts) or None
+
+
 def _format_event_html(event: Event) -> str | None:
     if isinstance(event, MarksChanged):
-        return "\n".join(_render_mark_change(c) for c in event.changes) or None
+        return _render_marks(event.changes)
     if isinstance(event, AbsencesChanged):
         lines = []
         for change in event.changes:
@@ -324,13 +354,14 @@ async def _restore_osep_session(user_id: int, client) -> None:
 async def _send_attachments(
     user_id: int, chat_id: int, reply_to: int, attachments: list[dict]
 ) -> None:
-    """Файлы — отдельным сообщением с ответом на первое сообщение письма.
+    """Файлы одним сообщением-альбомом (send_media_group, ≤10 файлов на альбом).
 
     Если worker уже положил файл в кэш — используем готовый путь, НЕ скачиваем
     повторно (иначе двойное скачивание и двойное удаление в логах).
     """
     client = get_osep_client(user_id)
     await _restore_osep_session(user_id, client)
+    paths: list[tuple[str, str]] = []  # (путь, имя файла) — последовательность скачанных
     for attachment in attachments:
         attachment_id = str(attachment.get("attachment_id") or "")
         filename = str(attachment.get("filename") or "file")
@@ -342,27 +373,40 @@ async def _send_attachments(
             user_id=user_id,
         )
         if cached is not None:
-            path = cached
-        else:
-            try:
-                path = await _cache.get_or_download(
-                    attachment_id=attachment_id or filename,
-                    filename=filename,
-                    size=size,
-                    user_id=user_id,
-                    download=lambda a=attachment_id: client.download_attachment(a),
-                )
-            except Exception as error:
-                logger.error("вложение {} не скачалось: {}", filename, error)
-                await _send(chat_id, "⚠️ Не удалось отправить вложения", reply_to)
-                return
-        await send_with_retry(
-            lambda p=path, f=filename: _bot.send_document(
-                chat_id,
-                FSInputFile(p, filename=f),
-                reply_to_message_id=reply_to,
+            paths.append((cached, filename))
+            continue
+        try:
+            path = await _cache.get_or_download(
+                attachment_id=attachment_id or filename,
+                filename=filename,
+                size=size,
+                user_id=user_id,
+                download=lambda a=attachment_id: client.download_attachment(a),
             )
-        )
+        except Exception as error:
+            logger.error("вложение {} не скачалось: {}", filename, error)
+            continue
+        paths.append((path, filename))
+
+    if not paths:
+        await _send(chat_id, "⚠️ Не удалось отправить вложения", reply_to)
+        return
+
+    # отправляем альбомами по ≤10 файлов (лимит Telegram на send_media_group)
+    for start in range(0, len(paths), MEDIA_GROUP_LIMIT):
+        batch = paths[start : start + MEDIA_GROUP_LIMIT]
+        media = [
+            InputMediaDocument(media=FSInputFile(p, filename=f)) for p, f in batch
+        ]
+        try:
+            # первый альбом отвечает на первое сообщение письма, остальные — нет
+            await send_with_retry(
+                lambda m=media, r=(reply_to if start == 0 else None): _bot.send_media_group(
+                    chat_id, m, reply_to_message_id=r
+                )
+            )
+        except Exception as error:
+            logger.error("альбом вложений не отправился: {}", error)
 
 
 async def _notify(user_id: int, text: str, *, summary: str | None = None) -> None:

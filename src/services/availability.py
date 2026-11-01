@@ -19,9 +19,15 @@ from datetime import UTC, datetime, timedelta
 
 from arq.connections import ArqRedis
 
-__all__ = ["StatusTransition", "AvailabilityTracker", "STREAK_WINDOW"]
+__all__ = [
+    "StatusTransition",
+    "AvailabilityTracker",
+    "STREAK_WINDOW",
+    "MAX_UNAVAILABLE_AFTER",
+]
 
 STREAK_WINDOW = timedelta(minutes=3)  # окно «3 минуты без улучшений»
+MAX_UNAVAILABLE_AFTER = timedelta(minutes=5)  # столько без успехов — сразу DOWN
 
 
 def _streak_since(streak: dict, fallback: datetime) -> datetime:
@@ -96,6 +102,11 @@ class AvailabilityTracker:
         if streak.get("ok") != ok:
             streak = {"ok": ok, "since": now.isoformat()}
         streak_since = _streak_since(streak, now)
+        # 5 минут без успехов — сразу DOWN (не ждём окно «3 минуты»);
+        # до этого — временные сбои не дёргают статус
+        if not ok and now - streak_since >= MAX_UNAVAILABLE_AFTER:
+            await self._store(service, ok, now, streak_ok=ok, streak_since=now)
+            return StatusTransition(changed=True, is_up=ok, since=now)
         if now - streak_since < STREAK_WINDOW:
             # ещё идёт окно «3 минуты» — временные сбои не дёргают статус
             await self._store(
