@@ -72,11 +72,21 @@ async def scheduler_tick() -> int:
 
     # равномерно распределяем по времени: не более 30 запросов/сек
     # (1/30 сек ≈ 33ms между publish), чтобы не ударить по сервису разом
+    published = 0
     for user_id, service in jobs:
-        await publish(PollDue(user_id=user_id, service=service))
+        try:
+            await publish(PollDue(user_id=user_id, service=service))
+            published += 1
+        except Exception as error:
+            # Redis мигнул — одна упавшая публикация не должна ронять весь тик:
+            # пропущенная проверка придёт по своему интервалу следующим тиком
+            log.warning(
+                "не удалось поставить проверку {} | user={}: {}",
+                service.value, user_id, error,
+            )
         await asyncio.sleep(1.0 / 30.0)
 
-    return len(jobs)
+    return published
 
 
 async def scheduler_loop() -> None:
