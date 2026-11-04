@@ -19,7 +19,8 @@ def setup_logging(debug: bool = False) -> None:
         format=(
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
             "<level>{level: <8}</level> | "
-            "<cyan>{extra[component]: <12}</cyan> | {message}"
+            "<cyan>{extra[component]: <12}</cyan> | "
+            "<dim>{name}:{line}</dim> | {message}"
         ),
     )
 
@@ -31,5 +32,6 @@ def setup_logging(debug: bool = False) -> None:
         retention="14 days",
         level="DEBUG",
         encoding="utf-8",
-        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {extra[component]: <12} | {message}",
+        # модуль:строка — чтобы сразу видеть, где именно сработало
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {extra[component]: <12} | {name}:{line} | {message}",
     )

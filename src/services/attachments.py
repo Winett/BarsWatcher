@@ -77,8 +77,8 @@ class AttachmentCache:
         path = entry / _safe_name(filename)
         if path.exists() and (time.time() - path.stat().st_mtime) < self._ttl:
             logger.info(
-                "📎 ИЗ КЭША: {} | id={} | user={}",
-                path.name, attachment_id, user_id,
+                "📂 Вложение {} загружено из кэша | user={}",
+                path.name, user_id,
             )
             return path
 
@@ -86,10 +86,9 @@ class AttachmentCache:
         entry.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
         logger.info(
-            "⬇️ СКАЧАНО: {} | {} КБ | id={} | {} | user={}",
+            "✅ Вложение {} скачано на диск | {} КБ | {} | user={}",
             path.name,
             len(data) // 1024,
-            attachment_id,
             "общий кэш" if self.is_shared(size) else "персональный",
             user_id,
         )
@@ -115,6 +114,10 @@ class AttachmentCache:
         )
         path = entry / _safe_name(filename)
         if path.exists() and (time.time() - path.stat().st_mtime) < self._ttl:
+            logger.info(
+                "📂 Вложение {} загружено из кэша | user={}",
+                path.name, user_id,
+            )
             return path
         return None
 
@@ -128,7 +131,7 @@ class AttachmentCache:
             if path.is_file() and now - path.stat().st_mtime >= self._ttl:
                 path.unlink(missing_ok=True)
                 removed += 1
-                logger.info("вложение удалено (TTL {}с): {}", int(self._ttl), path.name)
+                logger.info("🗑 Вложение {} удалено (устарело, TTL {}с)", path.name, int(self._ttl))
         # убрать опустевшие каталоги (сначала глубокие)
         for directory in sorted(
             (p for p in self._root.rglob("*") if p.is_dir()),

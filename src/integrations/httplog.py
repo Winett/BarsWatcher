@@ -30,7 +30,8 @@ def attach_http_logging(client: httpx.AsyncClient, tag: str) -> None:
         elapsed = (
             f"{int((time.monotonic() - started) * 1000)}ms" if started else "?"
         )
-        log.info(
+        # каждый HTTP-ответ — отладочный шум, не ключевое событие (п.6)
+        log.debug(
             "{} | ← {} {} → {} ({})",
             tag,
             request.method,

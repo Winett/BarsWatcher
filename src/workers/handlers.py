@@ -82,13 +82,14 @@ __all__ = ["run_check", "check_marks", "check_mail"]
 
 @subscribe(PollDue)
 async def on_poll_due(event: PollDue) -> None:
-    log.info("проверка {} | user={}", event.service.value, event.user_id)
+    # рутинная проверка по расписанию — не ключевое событие (DEBUG)
+    log.debug("проверка {} | user={}", event.service.value, event.user_id)
     await run_check(event.user_id, event.service)
 
 
 @subscribe(CheckRequested)
 async def on_check_requested(event: CheckRequested) -> None:
-    log.info("ручная проверка {} | user={}", event.service.value, event.user_id)
+    log.debug("ручная проверка {} | user={}", event.service.value, event.user_id)
     await run_check(event.user_id, event.service)
 
 
@@ -458,7 +459,7 @@ async def check_marks(user_id: int) -> None:
         fetch_ms = _ms(t1)
         if fetch_ms > SLOW_RESPONSE_MS:
             log.warning("медленный ответ БАРС: {}ms | {}", fetch_ms, tag)
-        log.info(
+        log.debug(
             "check_marks: {} | предметов={} | изменений оценок={} пропусков={} | {}ms",
             tag, len(marks_snapshot), len(mark_changes), len(absence_changes), fetch_ms,
         )
@@ -566,6 +567,14 @@ async def check_mail(user_id: int) -> None:
                 for mail in await client.fetch_new_mails(folder, delta):
                     if _is_blacklisted(mail.sender_email, blacklist):
                         continue
+                    # ключевое событие — как в master-ветке
+                    log.info(
+                        "📧 Новое письмо от {} | Тема: {} | Вложений: {} | {}",
+                        mail.sender_name or mail.sender_email or "?",
+                        mail.subject or "?",
+                        len(mail.attachments or []),
+                        tag,
+                    )
                     # вложения скачиваем сразу (как в master): сессия свежая,
                     # бот отправит файлы из общего кэша без повторного входа
                     await _prefetch_attachments(user_id, mail.attachments, client)

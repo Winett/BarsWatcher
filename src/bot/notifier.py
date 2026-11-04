@@ -333,7 +333,6 @@ async def _on_mail(event: MailReceived) -> None:
     full = header + body
     if attachments:
         full += "\n\nЕсть вложения!"
-    first_id = await _send(chat_id, full)
     try:
         first_id = await _send(chat_id, full)
     except Exception as error:
@@ -349,7 +348,6 @@ async def _on_mail(event: MailReceived) -> None:
         )
         return
 
-    attachments = mail.get("attachments") or []
     if not attachments or first_id is None:
         return
     await _send_attachments(event.user_id, chat_id, first_id, attachments)
