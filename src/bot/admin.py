@@ -340,7 +340,8 @@ async def _admins_panel(callback: CallbackQuery) -> None:
         ).scalars().all()
     lines = [f"🛡 <b>Администраторы</b> ({len(ids)})", ""]
     for user in rows_db:
-        name = f"@{user.username}" if user.username else "—"
+        # <code> — username копируется тапом (parse_mode=HTML)
+        name = f"<code>@{user.username}</code>" if user.username else "—"
         lock = " 🔒" if is_env_admin(user.telegram_id) else ""
         lines.append(f"· {name} · telegram_id=<code>{user.telegram_id}</code>{lock}")
     if not rows_db:
@@ -414,7 +415,8 @@ async def _user_card_text(user_id: int) -> tuple[str, InlineKeyboardMarkup] | No
         global_row = await uow.config.get_global()
         override_row = await uow.config.get_override(user_id)
 
-    name = f"@{user.username}" if user.username else "—"
+    # <code> — username моноширинный и копируется тапом (parse_mode=HTML)
+    name = f"<code>@{user.username}</code>" if user.username else "—"
     lines = [
         f"👤 <b>{name}</b> · id={user.id} · telegram_id=<code>{user.telegram_id}</code>",
         f"Активен: {'да' if user.is_active else 'нет'} · Заблокирован: {'да' if user.is_blocked else 'нет'}",
@@ -426,7 +428,7 @@ async def _user_card_text(user_id: int) -> tuple[str, InlineKeyboardMarkup] | No
     bars_profile = user.bars_profile
     bars_settings = user.bars_settings
     lines.append(f"📗 <b>БАРС</b>: {_STATUS_LABELS.get(getattr(bars_state, 'status', None), '—')}")
-    lines.append(f"   Логин: {bars_creds.login if bars_creds and bars_creds.login else '—'}")
+    lines.append(f"   Логин: <code>{bars_creds.login if bars_creds and bars_creds.login else '—'}</code>")
     if bars_profile and (bars_profile.fio or bars_profile.group):
         responsible = " · ответственный за журнал" if bars_profile.is_journal_responsible else ""
         lines.append(
@@ -444,7 +446,7 @@ async def _user_card_text(user_id: int) -> tuple[str, InlineKeyboardMarkup] | No
     osep_creds = user.osep_credentials
     osep_settings = user.osep_settings
     lines.append(f"📧 <b>ОСЭП</b>: {_STATUS_LABELS.get(getattr(osep_state, 'status', None), '—')}")
-    lines.append(f"   Логин: {osep_creds.login if osep_creds and osep_creds.login else '—'}")
+    lines.append(f"   Логин: <code>{osep_creds.login if osep_creds and osep_creds.login else '—'}</code>")
     if osep_settings and osep_settings.blacklist:
         lines.append(f"   Чёрный список: {len(osep_settings.blacklist)} шт.")
     else:
