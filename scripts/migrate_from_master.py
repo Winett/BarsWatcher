@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -154,17 +155,22 @@ async def migrate(old_url: str, new_url: str) -> None:
                     )
                 )
 
-            # состояние мониторинга: used_bars/used_osep → ACTIVE
+            # состояние мониторинга: used_bars/used_osep → ACTIVE («кто был
+            # подключён — продолжает работать»); next_check=now — планировщик
+            # подхватит пользователя в первый же тик после запуска новой версии
+            now = datetime.now(UTC)
             session.add(
                 BarsState(
                     user_id=user.id,
                     status=WatchStates.ACTIVE if old.get("used_bars") else WatchStates.INITIAL,
+                    next_check=now if old.get("used_bars") else None,
                 )
             )
             session.add(
                 OsepState(
                     user_id=user.id,
                     status=WatchStates.ACTIVE if old.get("used_osep") else WatchStates.INITIAL,
+                    next_check=now if old.get("used_osep") else None,
                 )
             )
 
@@ -194,6 +200,26 @@ async def migrate(old_url: str, new_url: str) -> None:
         await session.commit()
 
     print(f"пользователей перенесено: {migrated}, пропущено (уже есть): {skipped}")
+
+    # сводка «кто подключён» — чтобы сразу проверить результат миграции
+    async with new_session() as session:
+        bars_active = (
+            await session.execute(
+                select(BarsState).where(BarsState.status == WatchStates.ACTIVE)
+            )
+        ).scalars().all()
+        osep_active = (
+            await session.execute(
+                select(OsepState).where(OsepState.status == WatchStates.ACTIVE)
+            )
+        ).scalars().all()
+    print(
+        "подключено к отслеживанию: "
+        f"БАРС — {len(bars_active)}, ОСЭП — {len(osep_active)}"
+    )
+    print(
+        "Проверка: /admin → 👤 Пользователи — статусы должны быть «🟢 Включено»."
+    )
 
     await old_engine.dispose()
     await new_engine.dispose()
