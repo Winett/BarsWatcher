@@ -11,6 +11,7 @@ from .diff import (
     diff_bars_marks,
     diff_folder_counts,
 )
+from .profiles import PROCESS_STARTED_AT, profile_stale, save_bars_profile
 from .snapshots import SnapshotStore
 
 __all__ = [
@@ -25,4 +26,7 @@ __all__ = [
     "diff_bars_absences",
     "apply_hidden_mark",
     "diff_folder_counts",
+    "PROCESS_STARTED_AT",
+    "profile_stale",
+    "save_bars_profile",
 ]
