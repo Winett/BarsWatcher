@@ -68,7 +68,9 @@ from src.services import (
     diff_bars_absences,
     diff_bars_marks,
     diff_folder_counts,
+    profile_stale,
     resolve_poll_settings,
+    save_bars_profile,
 )
 from src.services.attachments import AttachmentCache
 
@@ -223,29 +225,21 @@ async def on_auth_2fa_submitted(event: Auth2FASubmitted) -> None:
         if result.status == AuthStatus.OK:
             state.status = WatchStates.ACTIVE
             state.last_error_message = None
-            # после 2FA тоже обновляем право «ответственный за журнал»
+            # после успешного входа профиль перепроверяется всегда (п.7):
+            # ФИО/группа/ответственный могли измениться
             try:
-                responsible = await client.is_journal_responsible()
-                row = await uow.bars_profile.get_by_user_id(event.user_id)
-                if row is not None and row.is_journal_responsible != responsible:
-                    row.is_journal_responsible = responsible
-                    log.info(
-                        "право ответственного обновлено → {} | user={}",
-                        responsible, event.user_id,
-                    )
-            except (ServiceUnavailableError, AuthError) as error:
-                log.warning("право ответственного не обновлено: {}", error)
-            if _profile_stale(await uow.bars_profile.get_by_user_id(event.user_id)):
-                try:
-                    await _save_profile(uow, event.user_id, await client.fetch_profile())
-                except (ServiceUnavailableError, AuthError, DataParseError) as error:
-                    log.warning("профиль БАРС не сохранён: {}", error)
+                await save_bars_profile(
+                    uow, event.user_id, await client.fetch_profile()
+                )
+            except (ServiceUnavailableError, AuthError, DataParseError) as error:
+                log.warning("профиль БАРС не сохранён: {}", error)
             await uow.commit()
             await publish(
                 AuthCompleted(user_id=event.user_id, service=event.service)
             )
             log.info("2FA принят, отслеживание активно | user={}", event.user_id)
         else:
+            # сервер ответил и отклонил код — единственный случай «неверный код»
             await uow.commit()
             await publish(
                 Auth2FAFailed(user_id=event.user_id, service=event.service)
@@ -388,10 +382,13 @@ async def check_marks(user_id: int) -> None:
         except (ServiceUnavailableError, AuthError) as error:
             log.warning("право ответственного не обновлено: {}", error)
 
-        # профиль (ФИО/группа/ответственный за журнал) — обновляем раз в сутки
-        if _profile_stale(await uow.bars_profile.get_by_user_id(user_id)):
+        # профиль (ФИО/группа/ответственный) — после каждого входа и раз в сутки:
+        # значения могли измениться (перевод, смена группы/старосты)
+        if just_authenticated or profile_stale(
+            await uow.bars_profile.get_by_user_id(user_id)
+        ):
             try:
-                await _save_profile(uow, user_id, await client.fetch_profile())
+                await save_bars_profile(uow, user_id, await client.fetch_profile())
             except (ServiceUnavailableError, AuthError, DataParseError) as error:
                 log.warning("профиль БАРС не сохранён: {}", error)
 
@@ -606,7 +603,7 @@ async def check_mail(user_id: int) -> None:
         fetch_ms = _ms(t1)
         if fetch_ms > SLOW_RESPONSE_MS:
             log.warning("медленный ответ ОСЭП: {}ms | {}", fetch_ms, tag)
-        log.info(
+        log.debug(
             "check_mail: {} | папок={} | новых писем={} | {}ms",
             tag, len(counts), sent, fetch_ms,
         )
@@ -842,28 +839,4 @@ async def _report_availability(
     )
 
 
-def _profile_stale(row) -> bool:
-    """Профиль БАРС пора обновить: нет записи или данные старше суток.
 
-    ФИО/группа/ответственный могут меняться (перевод, смена старосты) —
-    подтягиваем периодически, а не только при первой регистрации.
-    """
-    if row is None:
-        return True
-    updated = getattr(row, "updated_at", None)
-    if updated is None:
-        return True
-    if updated.tzinfo is None:
-        updated = updated.replace(tzinfo=UTC)
-    return datetime.now(UTC) - updated > timedelta(hours=24)
-
-async def _save_profile(uow, user_id: int, profile: dict) -> None:
-    from src.db.models import BarsProfile
-
-    row = await uow.bars_profile.get_by_user_id(user_id)
-    if row is None:
-        row = BarsProfile(user_id=user_id)
-        await uow.bars_profile.add(row)
-    row.fio = profile.fio
-    row.group = profile.group
-    row.is_journal_responsible = bool(profile.is_journal_responsible)

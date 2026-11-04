@@ -32,8 +32,16 @@ from src.db.models import (
 )
 from src.events import get_redis, publish
 from src.events.contracts import CheckRequested, LessonsCheckRequested
-from src.integrations import AuthError, AuthResult, AuthStatus, get_bars_client, get_osep_client
+from src.integrations import (
+    AuthError,
+    AuthResult,
+    AuthStatus,
+    ServiceUnavailableError,
+    get_bars_client,
+    get_osep_client,
+)
 from src.repositories.uow import UnitOfWork
+from src.services import save_bars_profile
 from src.services.admins import admin_telegram_ids
 
 from . import keyboards as kb
@@ -170,7 +178,8 @@ async def _notify_new_user(message: Message) -> None:
         if row is None or not row.notify_new_users:
             return
         user = message.from_user
-        name = f"@{user.username}" if user.username else user.full_name
+        # <code> — username моноширинный и копируется тапом (parse_mode=HTML)
+        name = f"<code>@{user.username}</code>" if user.username else user.full_name
         parts = [f"🆕 Новый пользователь: {name}"]
         # <code> — id моноширинный и копируется тапом (parse_mode=HTML у бота)
         parts.append(f"telegram_id: <code>{user.id}</code>")
@@ -352,6 +361,10 @@ async def _after_auth(
         await _publish_check(db_id, service)
         await message.edit_text("Авторизация успешна\n\nОтслеживание включено")
         await _render_panel(message, service, telegram_id)
+        # включение вотчера = момент перепроверки профиля (ФИО/группа/ответственный
+        # могли измениться) — как и после запуска бота/worker'а; после ответа UI,
+        # чтобы не задерживать реакцию на кнопку
+        await _refresh_profile(service, db_id, client)
         return
 
     if result.status is AuthStatus.TWO_FACTOR_REQUIRED:
@@ -554,6 +567,9 @@ async def on_2fa_code(message: Message, state: FSMContext) -> None:
         await _set_watching(service, message.from_user.id, watching=True)
         await _publish_check(db_id, service)
         await message.answer("✅ Код принят — отслеживание включено")
+        # включение вотчера = перепроверка профиля (ФИО/группа/ответственный);
+        # после ответа пользователю, чтобы не задерживать реакцию
+        await _refresh_profile(service, db_id, client)
     else:
         await message.answer(
             "❌ Код введён неверно. Попробуйте снова:",
@@ -755,6 +771,29 @@ async def _db_user_id(telegram_id: int, uow=None) -> int:
             return user.id if user else telegram_id
     user = await uow.users.get_by_telegram_id(telegram_id)
     return user.id if user else telegram_id
+
+
+async def _refresh_profile(service: str, db_id: int, client) -> None:
+    """Перепроверить профиль БАРС (best-effort) — данные могли измениться.
+
+    Вызывается при включении вотчера пользователем; после запуска процесса
+    профиль перепроверяет worker при первой удачной авторизации
+    (см. src.services.profiles.profile_stale).
+    """
+    if service != "bars":
+        return  # у ОСЭП профиля нет
+    try:
+        profile = await client.fetch_profile()
+    except Exception as error:
+        logger.warning("профиль БАРС не перепроверен: {}", error)
+        return
+    try:
+        async with session_factory() as session:
+            uow = UnitOfWork(session)
+            await save_bars_profile(uow, db_id, profile)
+            await uow.commit()
+    except Exception as error:
+        logger.warning("профиль БАРС не сохранён: {}", error)
 
 
 async def _creds(uow, service: str, db_id: int):
