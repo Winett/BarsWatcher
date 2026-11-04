@@ -334,11 +334,35 @@ async def _on_mail(event: MailReceived) -> None:
     if attachments:
         full += "\n\nЕсть вложения!"
     first_id = await _send(chat_id, full)
+    try:
+        first_id = await _send(chat_id, full)
+    except Exception as error:
+        # письмо не доставили — сообщаем хотя бы о факте нового письма (п.9)
+        logger.error(
+            "письмо «{}» не отправилось | user={}: {}",
+            subject, event.user_id, error,
+        )
+        await _notify_delivery_problem(
+            chat_id,
+            f"📧 Появилось новое письмо (Тема: {escape(subject)}), "
+            "но не получилось его прислать.",
+        )
+        return
 
     attachments = mail.get("attachments") or []
     if not attachments or first_id is None:
         return
     await _send_attachments(event.user_id, chat_id, first_id, attachments)
+
+
+async def _notify_delivery_problem(chat_id: int, text: str) -> None:
+    """Запасное уведомление: основное сообщение/вложения не доставились (п.9)."""
+    try:
+        await send_with_retry(lambda: _bot.send_message(chat_id, text))
+    except Exception as error:
+        logger.error(
+            "запасное уведомление не отправилось | chat={}: {}", chat_id, error
+        )
 
 
 async def _restore_osep_session(user_id: int, client) -> None:
@@ -365,6 +389,7 @@ async def _send_attachments(
     client = get_osep_client(user_id)
     await _restore_osep_session(user_id, client)
     paths: list[tuple[str, str]] = []  # (путь, имя файла) — последовательность скачанных
+    failed: list[str] = []  # имена вложений, которые не удалось скачать
     for attachment in attachments:
         attachment_id = str(attachment.get("attachment_id") or "")
         filename = str(attachment.get("filename") or "file")
@@ -388,11 +413,18 @@ async def _send_attachments(
             )
         except Exception as error:
             logger.error("вложение {} не скачалось: {}", filename, error)
+            failed.append(filename)
             continue
         paths.append((path, filename))
 
+    # письмо есть, но вложения (или часть) отправить не удалось — предупреждаем (п.9)
+    if failed:
+        await _notify_delivery_problem(
+            chat_id,
+            "⚠️ Есть вложения, но не получилось их отправить: "
+            + ", ".join(failed),
+        )
     if not paths:
-        await _send(chat_id, "⚠️ Не удалось отправить вложения", reply_to)
         return
 
     # отправляем альбомами по ≤10 файлов (лимит Telegram на send_media_group)
@@ -410,6 +442,11 @@ async def _send_attachments(
             )
         except Exception as error:
             logger.error("альбом вложений не отправился: {}", error)
+            await _notify_delivery_problem(
+                chat_id,
+                "⚠️ Есть вложения, но не получилось их отправить: "
+                + ", ".join(f for _p, f in batch),
+            )
 
 
 async def _notify(user_id: int, text: str, *, summary: str | None = None) -> None:
