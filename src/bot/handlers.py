@@ -894,11 +894,18 @@ async def _restore_session(service: str, db_id: int, client) -> None:
 
 
 async def _service_status(service: ServiceKind) -> tuple[bool, datetime | None]:
-    """Актуальный статус сервиса: источник истины — tracker в Redis."""
+    """Актуальный статус сервиса: источник истины — tracker в Redis.
+
+    Redis недоступен — не роняем UI: считаем сервис доступным (не пугаем).
+    """
     from src.services.availability import AvailabilityTracker
 
-    redis = await get_redis()
-    up, since = await AvailabilityTracker(redis).get_status(service.value)
+    try:
+        redis = await get_redis()
+        up, since = await AvailabilityTracker(redis).get_status(service.value)
+    except Exception as error:
+        logger.warning("статус {} недоступен (Redis?): {}", service.value, error)
+        return True, None
     if up is None:
         return True, None  # ещё не проверялся — считаем доступным, не пугаем
     return up, since
@@ -918,7 +925,8 @@ async def _forward_feedback(message: Message, kind: str) -> bool:
     if not ids:
         return False
     user = message.from_user
-    name = f"@{user.username}" if user.username else user.full_name
+    # <code> — username копируется тапом (parse_mode=HTML)
+    name = f"<code>@{user.username}</code>" if user.username else user.full_name
     for admin_id in ids:
         try:
             await message.bot.send_message(

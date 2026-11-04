@@ -194,12 +194,17 @@ class AuthCompleted(Event):
 
 @dataclass(kw_only=True)
 class Auth2FAFailed(Event):
-    """Код 2FA введён неверно — бот предлагает повторить ввод/отправить снова."""
+    """Код 2FA не принят — бот предлагает повторить ввод/отправить снова.
+
+    reason — причина отказа; пусто = сервер явно ответил «код неверный».
+    Непустой (например «сервер не ответил») — код НЕ считается неверным.
+    """
 
     event_type: ClassVar[str] = "auth.2fa_failed"
     target_queue: ClassVar[str] = QUEUE_BOT
     user_id: int
     service: ServiceKind
+    reason: str = ""
 
 
 @dataclass(kw_only=True)

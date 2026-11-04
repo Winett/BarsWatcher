@@ -11,6 +11,7 @@ dispatch_event  → job-функция: дедупликация по event_id +
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 
 from arq import create_pool
@@ -53,10 +54,31 @@ def subscribe(event_cls: type[Event]) -> Callable[[Handler], Handler]:
     return decorator
 
 
+POOL_CREATE_ATTEMPTS = 3  # Redis мог ещё подниматься — пробуем с паузой
+
+
 async def get_pool() -> ArqRedis:
+    """Пул Redis. Создание с ретраями: при старте Redis может быть ещё не готов.
+
+    Упавшее соединение redis-py восстанавливает сам при следующей команде,
+    поэтому пул пересоздавать не нужно — только дождаться его первого старта.
+    """
     global _pool
     if _pool is None:
-        _pool = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+        last_error: Exception | None = None
+        for attempt in range(1, POOL_CREATE_ATTEMPTS + 1):
+            try:
+                _pool = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+                break
+            except Exception as error:  # Redis ещё поднимается / недоступен
+                last_error = error
+                logger.warning(
+                    "events | Redis недоступен (попытка {}/{}): {}",
+                    attempt, POOL_CREATE_ATTEMPTS, error,
+                )
+                await asyncio.sleep(min(2**attempt, 10))
+        if _pool is None:
+            raise ConnectionError(f"Redis недоступен: {last_error}")
     return _pool
 
 
@@ -103,7 +125,13 @@ async def dispatch_event(ctx: dict, payload: dict) -> None:
         try:
             await handler(event)
         except Exception as error:
-            await redis.delete(seen_key)  # чтобы arq мог повторить задачу
+            try:
+                await redis.delete(seen_key)  # чтобы arq мог повторить задачу
+            except Exception as cleanup_error:
+                # Redis мог упасть — не маскируем исходную ошибку
+                logger.warning(
+                    "events | не снят маркер {}: {}", seen_key, cleanup_error
+                )
             # без traceback — только суть ошибки (traceback'и лишь засоряют лог)
             logger.error(
                 "events | обработчик {} упал на {}: {}",
