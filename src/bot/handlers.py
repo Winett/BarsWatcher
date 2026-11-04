@@ -256,9 +256,9 @@ async def panel_action(callback: CallbackQuery, state: FSMContext) -> None:
 async def _authenticate_client(service: str, client, login: str, password: str):
     """Авторизация с потолком времени; ошибка сервиса — не «неверные креды».
 
-    Возвращает AuthResult. При таймауте/сбое клиента возвращаем результат с
-    явным текстом ошибки (НЕ INVALID_CREDENTIALS), чтобы UI не зависал на
-    «Попытка авторизоваться» и не врал про неверный пароль.
+    Возвращает AuthResult. При таймауте/сбое клиента — SERVICE_ERROR с явным
+    текстом: это НЕ «неверный логин/пароль» и НЕ успех (вотчер не включаем,
+    но и не помечаем креды неверными).
     """
     try:
         return await asyncio.wait_for(
@@ -267,13 +267,13 @@ async def _authenticate_client(service: str, client, login: str, password: str):
     except TimeoutError:
         logger.error("авторизация {} превысила таймаут ({}с)", service, AUTH_TIMEOUT)
         return AuthResult(
-            AuthStatus.OK,
+            AuthStatus.SERVICE_ERROR,
             error="Сервис не ответил за отведённое время — попробуйте позже",
         )
     except Exception as error:  # noqa: BLE001 — UI не должно падать на ошибке клиента
         logger.error("авторизация {} не удалась (ошибка клиента): {}", service, error)
         return AuthResult(
-            AuthStatus.OK,
+            AuthStatus.SERVICE_ERROR,
             error="Сервис временно недоступен — попробуйте позже",
         )
 
@@ -376,7 +376,17 @@ async def _after_auth(
         )
         return
 
-    # неверные креды / другое
+    if result.status is AuthStatus.SERVICE_ERROR:
+        # сервис не ответил — это НЕ «неверный логин/пароль» и НЕ успех:
+        # вотчер не включаем, креды не помечаем неверными
+        reason = result.error or "Сервис временно недоступен — попробуйте позже"
+        await message.edit_text(
+            f"⚠️ {reason}",
+            reply_markup=kb.back_kb(f"menu:{service}"),
+        )
+        return
+
+    # сервер сам отклонил логин/пароль — единственный случай «неверные креды»
     reason = result.error or "Неверно указан логин или пароль"
     await message.edit_text(
         f"⚠️ {reason}",
@@ -475,6 +485,12 @@ async def two_fa_action(callback: CallbackQuery, state: FSMContext) -> None:
             await state.clear()
             await _render_panel(callback.message, service, callback.from_user.id)
             return
+        except Exception as error:
+            logger.error("не удалось отправить код 2FA повторно: {}", error)
+            await callback.answer(
+                "Сервис не ответил — попробуйте позже", show_alert=True
+            )
+            return
         await state.update_data(
             code_requested_at=datetime.now(UTC).isoformat(),
             code_destination=result.destination or "",
@@ -517,6 +533,14 @@ async def on_2fa_code(message: Message, state: FSMContext) -> None:
     await _restore_session(service, db_id, client)
     try:
         result = await client.verify_2fa_code(code)
+    except (ServiceUnavailableError, ConnectionError, TimeoutError) as error:
+        # ответ не получен — это НЕ «код неверный»: оставляем ввод, можно повторить
+        logger.warning("проверка 2FA не удалась (сервис не ответил): {}", error)
+        await message.answer(
+            "⚠️ Сервис не ответил, код не проверен. Попробуйте ввести его ещё раз:",
+            reply_markup=kb.two_fa_input_kb(service),
+        )
+        return
     except AuthError:
         await state.clear()
         await message.answer(

@@ -176,6 +176,9 @@ def _format_event_html(event: Event) -> str | None:
         destination = escape(event.destination or "куда — неизвестно")
         return f"🔁 {title}: код 2FA отправлен повторно ({destination})"
     if isinstance(event, Auth2FAFailed):
+        if event.reason:
+            # код НЕ считается неверным: сервер не дал однозначного ответа
+            return f"⚠️ {_service_title(event.service)}: {escape(event.reason)}"
         return f"❌ {_service_title(event.service)}: код 2FA введён неверно"
     if isinstance(event, AuthCompleted):
         return (

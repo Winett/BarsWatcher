@@ -193,14 +193,28 @@ async def on_auth_2fa_submitted(event: Auth2FASubmitted) -> None:
         try:
             result = await client.verify_2fa_code(event.code)
         except (ServiceUnavailableError, ConnectionError, TimeoutError, DataParseError) as error:
+            # ответ не получен — это НЕ «код неверный»: вотчер остаётся в
+            # WAITING_2FA, пользователь может просто повторить ввод
             log.warning("проверка 2FA не удалась: {}", error)
+            await publish(
+                Auth2FAFailed(
+                    user_id=event.user_id,
+                    service=event.service,
+                    reason="сервис не ответил при проверке кода — попробуйте ещё раз",
+                )
+            )
             return
         except AuthError as error:
-            state.last_error_message = str(error)[:255]
+            # сервер не дал повторить ввод — тоже НЕ факт, что код неверный
+            reason = "не удалось проверить код — начните ввод заново"
+            log.warning("проверка 2FA не удалась: {}", error)
+            state.last_error_message = reason
             state.last_error_datetime = datetime.now(UTC)
             await uow.commit()
             await publish(
-                Auth2FAFailed(user_id=event.user_id, service=event.service)
+                Auth2FAFailed(
+                    user_id=event.user_id, service=event.service, reason=reason
+                )
             )
             return
 
@@ -323,16 +337,40 @@ async def check_marks(user_id: int) -> None:
             )
             return
 
-        # авторизация (с обработкой 2FA)
-        if not await client.is_authenticated():
-            result = await client.authenticate(creds.login, creds.password or "")
-            if result.status == AuthStatus.TWO_FACTOR_REQUIRED:
-                await _enter_2fa(uow, state, client, user_id)
-                return
-            if result.status == AuthStatus.INVALID_CREDENTIALS:
-                await _on_auth_failed(uow, state, now, user_id, ServiceKind.BARS)
-                return
-            _save_session(state, client)
+        # авторизация (с обработкой 2FA). Сбой сервиса/сети — это НЕ «неверный
+        # логин/пароль»: вотчер НЕ выключается, просто пропускаем итерацию
+        just_authenticated = False
+        try:
+            if not await client.is_authenticated():
+                result = await client.authenticate(creds.login, creds.password or "")
+                if result.status == AuthStatus.TWO_FACTOR_REQUIRED:
+                    await _enter_2fa(uow, state, client, user_id)
+                    return
+                if result.status == AuthStatus.INVALID_CREDENTIALS:
+                    # сервер САМ сообщил об ошибке входа — только это основание
+                    # выключить вотчер
+                    await _on_auth_failed(uow, state, now, user_id, ServiceKind.BARS)
+                    return
+                if result.status == AuthStatus.SERVICE_ERROR:
+                    # не получили ответ — НЕ «неверные креды», пропуск итерации
+                    raise ServiceUnavailableError(result.error or "сервис не ответил")
+                _save_session(state, client)
+                just_authenticated = True
+        except (ServiceUnavailableError, ConnectionError, TimeoutError) as error:
+            # не получили ответ сервера — НЕ считаем креды неверными
+            await _on_iteration_error(
+                uow, state, poll, now, error,
+                service=ServiceKind.BARS, tracker=tracker, unavailable=True,
+            )
+            await uow.commit()
+            return
+        except (AuthError, DataParseError) as error:
+            # неизвестный ответ сервера — тоже НЕ считаем креды неверными
+            await _on_iteration_error(
+                uow, state, poll, now, error, service=ServiceKind.BARS
+            )
+            await uow.commit()
+            return
 
         # при каждой удачной авторизации обновляем право «ответственный за
         # журнал» (мало средств: один запрос EditStudyGroup); ошибка сервера
@@ -476,12 +514,33 @@ async def check_mail(user_id: int) -> None:
             )
             return
 
-        if not await client.is_authenticated():
-            result = await client.authenticate(creds.login, creds.password or "")
-            if result.status == AuthStatus.INVALID_CREDENTIALS:
-                await _on_auth_failed(uow, state, now, user_id, ServiceKind.OSEP)
-                return
-            _save_session(state, client)
+        # авторизация: сбой сервиса/сети — НЕ «неверный логин/пароль»,
+        # вотчер не выключается, просто пропускаем итерацию
+        try:
+            if not await client.is_authenticated():
+                result = await client.authenticate(creds.login, creds.password or "")
+                if result.status == AuthStatus.INVALID_CREDENTIALS:
+                    # сервер ответил и не принял креды — выключаем вотчер
+                    await _on_auth_failed(uow, state, now, user_id, ServiceKind.OSEP)
+                    return
+                if result.status == AuthStatus.SERVICE_ERROR:
+                    # не получили ответ — НЕ «неверные креды», пропуск итерации
+                    raise ServiceUnavailableError(result.error or "сервис не ответил")
+                _save_session(state, client)
+        except (ServiceUnavailableError, ConnectionError, TimeoutError) as error:
+            # не получили ответ сервера — НЕ считаем креды неверными
+            await _on_iteration_error(
+                uow, state, poll, now, error,
+                service=ServiceKind.OSEP, tracker=tracker, unavailable=True,
+            )
+            await uow.commit()
+            return
+        except (AuthError, DataParseError) as error:
+            await _on_iteration_error(
+                uow, state, poll, now, error, service=ServiceKind.OSEP
+            )
+            await uow.commit()
+            return
 
         try:
             t1 = time.monotonic()

@@ -10,7 +10,9 @@
     не удался);
   - TwoFactorRequiredError — перелогин потребовал 2FA (подкласс AuthError);
   - DataParseError — неожиданный формат ответа (парсер не разобрал страницу).
-Неверный логин/пароль — не исключение, а AuthStatus.INVALID_CREDENTIALS.
+Неверный логин/пароль — не исключение, а AuthStatus.INVALID_CREDENTIALS;
+не полученный ответ сервера — AuthStatus.SERVICE_ERROR (или исключение
+ServiceUnavailableError): НЕ считаем креды/код неверными.
 """
 
 from __future__ import annotations
@@ -45,6 +47,9 @@ class AuthStatus(StrEnum):
     INVALID_CREDENTIALS = "invalid_credentials"
     TWO_FACTOR_REQUIRED = "two_factor_required"
     CODE_INVALID = "code_invalid"
+    # сервис не ответил / сбой сети — это НЕ «неверные креды» и НЕ «неверный
+    # код»: вотчер продолжает работать, авторизацию повторим позже
+    SERVICE_ERROR = "service_error"
 
 
 @dataclass
