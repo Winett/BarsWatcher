@@ -46,6 +46,7 @@ from src.services.admins import admin_telegram_ids
 
 from . import keyboards as kb
 from . import panels
+from .callbacks import ack, answers
 
 __all__ = ["build_router"]
 
@@ -195,12 +196,14 @@ async def _notify_new_user(message: Message) -> None:
 
 
 @router.callback_query(F.data == "menu:home")
+@answers
 async def menu_home(callback: CallbackQuery) -> None:
-    await callback.message.edit_text(panels.WELCOME, reply_markup=kb.main_menu())
+    await _safe_edit(callback.message, panels.WELCOME, kb.main_menu())
     await callback.answer()
 
 
 @router.callback_query(F.data == "menu:refresh")
+@answers
 async def menu_refresh(callback: CallbackQuery) -> None:
     """«Обновить» на главной: перерисовать текущее сообщение (без запросов)."""
     await _safe_edit(callback.message, panels.WELCOME, kb.main_menu())
@@ -208,6 +211,7 @@ async def menu_refresh(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith("menu:"))
+@answers
 async def menu_service(callback: CallbackQuery) -> None:
     service = callback.data.split(":")[1]
     if service not in _SERVICES:
@@ -221,6 +225,7 @@ async def menu_service(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith("panel:"))
+@answers
 async def panel_action(callback: CallbackQuery, state: FSMContext) -> None:
     _, service, action = callback.data.split(":")
     user_id = callback.from_user.id
@@ -319,7 +324,9 @@ async def _start_auth(
         await callback.answer()
         return
 
-    await callback.message.edit_text("Попытка авторизоваться…")
+    # снять «часики» с кнопки до долгой авторизации (HTTP)
+    await ack(callback)
+    await _safe_edit(callback.message, "Попытка авторизоваться…")
     client = _client(service, db_id)
     await _restore_session(service, db_id, client)
 
@@ -343,7 +350,6 @@ async def _start_auth(
     await _after_auth(
         callback.message, state, service, user_id, db_id, result, client, callback
     )
-    await callback.answer()
 
 
 async def _after_auth(
@@ -359,7 +365,7 @@ async def _after_auth(
     if result.status is AuthStatus.OK:
         await _set_watching(service, telegram_id, watching=True)
         await _publish_check(db_id, service)
-        await message.edit_text("Авторизация успешна\n\nОтслеживание включено")
+        await _safe_edit(message, "Авторизация успешна\n\nОтслеживание включено")
         await _render_panel(message, service, telegram_id)
         # включение вотчера = момент перепроверки профиля (ФИО/группа/ответственный
         # могли измениться) — как и после запуска бота/worker'а; после ответа UI,
@@ -381,11 +387,12 @@ async def _after_auth(
         await _save_session(service, db_id, client)
         where = destination or result.error or "указанное в БАРС"
         await state.update_data(code_destination=where)
-        await message.edit_text(
+        await _safe_edit(
+            message,
             f"🔐 Требуется ввести 2FA код.\n"
             f"Код отправлен вам на: {where}\n"
             "Нажмите «Ввести код 2FA», когда будете готовы.",
-            reply_markup=kb.two_fa_prompt_kb(service),
+            kb.two_fa_prompt_kb(service),
         )
         return
 
@@ -393,18 +400,12 @@ async def _after_auth(
         # сервис не ответил — это НЕ «неверный логин/пароль» и НЕ успех:
         # вотчер не включаем, креды не помечаем неверными
         reason = result.error or "Сервис временно недоступен — попробуйте позже"
-        await message.edit_text(
-            f"⚠️ {reason}",
-            reply_markup=kb.back_kb(f"menu:{service}"),
-        )
+        await _safe_edit(message, f"⚠️ {reason}", kb.back_kb(f"menu:{service}"))
         return
 
     # сервер сам отклонил логин/пароль — единственный случай «неверные креды»
     reason = result.error or "Неверно указан логин или пароль"
-    await message.edit_text(
-        f"⚠️ {reason}",
-        reply_markup=kb.back_kb(f"menu:{service}"),
-    )
+    await _safe_edit(message, f"⚠️ {reason}", kb.back_kb(f"menu:{service}"))
 
 
 # ─────────────────────────────── ввод логина/пароля ───────────────────────────────
@@ -446,11 +447,14 @@ async def on_password(message: Message, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data.startswith("2fa:"))
+@answers
 async def two_fa_action(callback: CallbackQuery, state: FSMContext) -> None:
     _, service, action = callback.data.split(":")
     db_id = await _db_user_id(callback.from_user.id)
 
     if action == "input":
+        # снять «часики» до HTTP-отправки кода
+        await ack(callback)
         client = _client(service, db_id)
         # ожидающее 2FA-состояние могло быть создано worker'ом — восстанавливаем
         await _restore_session(service, db_id, client)
@@ -480,11 +484,11 @@ async def two_fa_action(callback: CallbackQuery, state: FSMContext) -> None:
                 service=service, code_requested_at=datetime.now(UTC).isoformat()
             )
             hint = ""
-        await callback.message.edit_text(
+        await _safe_edit(
+            callback.message,
             f"Введите код 2FA{hint}:",
-            reply_markup=kb.two_fa_input_kb(service),
+            kb.two_fa_input_kb(service),
         )
-        await callback.answer()
         return
 
     if action == "resend":
@@ -509,9 +513,10 @@ async def two_fa_action(callback: CallbackQuery, state: FSMContext) -> None:
             code_destination=result.destination or "",
         )
         destination = result.destination or "куда — неизвестно"
-        await callback.message.edit_text(
+        await _safe_edit(
+            callback.message,
             f"Введите код 2FA, он был отправлен вам повторно ({destination}):",
-            reply_markup=kb.two_fa_input_kb(service),
+            kb.two_fa_input_kb(service),
         )
         await callback.answer()
         return
@@ -622,19 +627,22 @@ async def _render_settings(callback: CallbackQuery, service: str, user_id: int) 
 
 
 @router.callback_query(F.data == "bars:pairs")
+@answers
 async def bars_pairs_check(callback: CallbackQuery) -> None:
     """Проверка пар за сегодня — та же логика, что у напоминания в 18:00."""
     db_id = await _db_user_id(callback.from_user.id)
     await publish(LessonsCheckRequested(user_id=db_id, days=1))
     await callback.answer("Проверяю пары за сегодня…")
-    await callback.message.edit_text(
+    await _safe_edit(
+        callback.message,
         "📋 Проверяю пары за сегодня (журнал + расписание)…\n\n"
         "Результат придёт отдельным сообщением.",
-        reply_markup=kb.back_kb("menu:bars"),
+        kb.back_kb("menu:bars"),
     )
 
 
 @router.callback_query(F.data == "bars:lessons")
+@answers
 async def bars_lessons_check(callback: CallbackQuery) -> None:
     """Сверка пар журнала с расписанием с начала семестра (для ответственного)."""
     # rate limit: не чаще раза в минуту (дорогая операция)
@@ -646,14 +654,16 @@ async def bars_lessons_check(callback: CallbackQuery) -> None:
     db_id = await _db_user_id(callback.from_user.id)
     await publish(LessonsCheckRequested(user_id=db_id, days=0))
     await callback.answer("Сверяю пары с начала семестра…")
-    await callback.message.edit_text(
+    await _safe_edit(
+        callback.message,
         "🔍 Сверяю пары журнала с расписанием (с начала семестра)…\n\n"
         "Выведу только непроставленные пары. Результат придёт отдельным сообщением.",
-        reply_markup=kb.back_kb("menu:bars"),
+        kb.back_kb("menu:bars"),
     )
 
 
 @router.callback_query(F.data.startswith("set:bars:"))
+@answers
 async def bars_setting_toggle(callback: CallbackQuery) -> None:
     field = callback.data.split(":")[2]
     db_id = await _db_user_id(callback.from_user.id)
@@ -674,14 +684,16 @@ async def bars_setting_toggle(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith("set:osep:"))
+@answers
 async def osep_setting_action(callback: CallbackQuery, state: FSMContext) -> None:
     action = callback.data.split(":")[2]
     if action == "bl_add":
         await state.set_state(BlacklistFlow.waiting_pattern)
-        await callback.message.edit_text(
+        await _safe_edit(
+            callback.message,
             "Отправьте шаблон отправителя (поддерживается *), "
             "например: *@spam.ru",
-            reply_markup=kb.back_kb("menu:osep"),
+            kb.back_kb("menu:osep"),
         )
     elif action == "bl_show":
         db_id = await _db_user_id(callback.from_user.id)
@@ -689,9 +701,10 @@ async def osep_setting_action(callback: CallbackQuery, state: FSMContext) -> Non
             uow = UnitOfWork(session)
             obj = await uow.osep_settings.get_by_user_id(db_id)
             blacklist = obj.blacklist if obj else []
-        await callback.message.edit_text(
+        await _safe_edit(
+            callback.message,
             panels.osep_settings_text(blacklist),
-            reply_markup=kb.osep_settings_kb(),
+            kb.osep_settings_kb(),
         )
     await callback.answer()
 
@@ -753,14 +766,24 @@ async def cmd_statistic(message: Message) -> None:
 async def _safe_edit(
     message: Message, text: str, keyboard=None
 ) -> None:
-    """edit_text с игнорированием «message is not modified»."""
+    """edit_text без падения на «нечего обновлять».
+
+    «message is not modified» — контент не изменился (двойной тап, повторное
+    открытие); «message to edit not found» — сообщение удалено. Оба случая —
+    не ошибки и не должны ронять хендлер.
+    """
     from aiogram.exceptions import TelegramBadRequest
 
     try:
         await message.edit_text(text, reply_markup=keyboard)
     except TelegramBadRequest as exc:
-        if "message is not modified" not in str(exc):
-            raise
+        error = str(exc)
+        if (
+            "message is not modified" in error
+            or "message to edit not found" in error
+        ):
+            return
+        raise
 
 
 async def _db_user_id(telegram_id: int, uow=None) -> int:

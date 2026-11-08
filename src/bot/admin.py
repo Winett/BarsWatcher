@@ -50,6 +50,8 @@ from src.services.admins import (
 from src.services.config_resolver import merge_settings
 from src.services.logfiles import build_log_zips, format_size, list_log_dates
 
+from .callbacks import answers
+
 log = logger.bind(component="admin")
 
 router = Router(name="admin")
@@ -262,8 +264,10 @@ async def _safe_edit(target: Message, text: str, keyboard: InlineKeyboardMarkup 
     try:
         await target.edit_text(text, reply_markup=keyboard)
     except Exception as exc:
-        if "message is not modified" in str(exc):
-            return  # контент не изменился — не дублируем сообщением
+        error = str(exc)
+        if "message is not modified" in error or "message to edit not found" in error:
+            # нечего обновлять / сообщение удалено — не ошибка и не дубль
+            return
         log.warning("не удалось отредактировать сообщение: {}", exc)
 
 
@@ -681,6 +685,7 @@ async def cmd_sim_toggle(message: Message) -> None:
 
 
 @router.callback_query(F.data.startswith("adm:"))
+@answers
 async def admin_callback(callback: CallbackQuery, state: FSMContext) -> None:
     if not await _require_admin(callback=callback):
         return
@@ -871,7 +876,7 @@ async def admin_callback(callback: CallbackQuery, state: FSMContext) -> None:
     elif action == "bcastcancel":
         await state.clear()
         await callback.answer("Рассылка отменена")
-        await callback.message.edit_text("Рассылка отменена")
+        await _safe_edit(callback.message, "Рассылка отменена", None)
     else:
         await callback.answer()
 
