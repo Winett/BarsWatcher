@@ -707,13 +707,27 @@ async def _prefetch_attachments(user_id: int, attachments: list, client) -> None
     Как в master: файлы забираются сразу при обнаружении письма — сессия
     свежая; бот потом просто отправляет их из кэша.
     """
+    max_bytes = settings.attachment_max_size_mb * 1024 * 1024
     for att in attachments:
         attachment_id = getattr(att, "attachment_id", "") or ""
         filename = getattr(att, "filename", "") or "file"
         size = int(getattr(att, "size", 0) or 0)
+        if size > max_bytes:
+            # вложение качается целиком в память — слишком большие пропускаем,
+            # чтобы не уронить процесс (бот предупредит пользователя)
+            log.warning(
+                "вложение {} пропущено: {} МБ > лимита {} МБ | user={}",
+                filename,
+                size // (1024 * 1024),
+                settings.attachment_max_size_mb,
+                user_id,
+            )
+            continue
         try:
             await _attachment_cache.get_or_download(
-                attachment_id=attachment_id or filename,
+                # НЕ подменяем пустой id именем файла: имя совпадает у разных
+                # студентов, а личные файлы (расчётные листки) шарить нельзя
+                attachment_id=attachment_id,
                 filename=filename,
                 size=size,
                 user_id=user_id,

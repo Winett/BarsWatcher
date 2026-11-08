@@ -16,6 +16,7 @@ from aiogram.types import FSInputFile, InputMediaDocument
 from loguru import logger
 
 from src.bot.throttle import send_with_retry
+from src.core.config import settings
 from src.db.database import session_factory
 from src.db.models import ServiceKind
 from src.events.bus import subscribe
@@ -386,14 +387,27 @@ async def _send_attachments(
     """
     client = get_osep_client(user_id)
     await _restore_osep_session(user_id, client)
+    max_bytes = settings.attachment_max_size_mb * 1024 * 1024
     paths: list[tuple[str, str]] = []  # (путь, имя файла) — последовательность скачанных
     failed: list[str] = []  # имена вложений, которые не удалось скачать
+    too_big: list[str] = []  # слишком большие (качаются целиком в память)
     for attachment in attachments:
         attachment_id = str(attachment.get("attachment_id") or "")
         filename = str(attachment.get("filename") or "file")
         size = int(attachment.get("size") or 0)
+        if size > max_bytes:
+            logger.warning(
+                "вложение {} пропущено: {} МБ > лимита {} МБ | user={}",
+                filename,
+                size // (1024 * 1024),
+                settings.attachment_max_size_mb,
+                user_id,
+            )
+            too_big.append(filename)
+            continue
         cached = _cache.get_if_cached(
-            attachment_id=attachment_id or filename,
+            # пустой id = персональный файл (см. src.services.attachments)
+            attachment_id=attachment_id,
             filename=filename,
             size=size,
             user_id=user_id,
@@ -403,7 +417,7 @@ async def _send_attachments(
             continue
         try:
             path = await _cache.get_or_download(
-                attachment_id=attachment_id or filename,
+                attachment_id=attachment_id,
                 filename=filename,
                 size=size,
                 user_id=user_id,
@@ -421,6 +435,13 @@ async def _send_attachments(
             chat_id,
             "⚠️ Есть вложения, но не получилось их отправить: "
             + ", ".join(failed),
+        )
+    if too_big:
+        await _notify_delivery_problem(
+            chat_id,
+            f"⚠️ Вложения слишком большие для отправки (лимит "
+            f"{settings.attachment_max_size_mb} МБ): "
+            + ", ".join(too_big),
         )
     if not paths:
         return

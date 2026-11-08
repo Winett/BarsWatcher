@@ -1,7 +1,7 @@
 import base64
 import hashlib
 
-from pydantic import SecretStr, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 __all__ = ["settings"]
@@ -31,13 +31,24 @@ class Settings(BaseSettings):
 
     # напоминания о проставлении пар в тестовых режимах: каждые N секунд
     # (0 — выключено; для real не используется, там 18:00 GMT+3)
-    sim_reminder_interval_seconds: int = 0
+    # оба имени переменной работают: полное и короткое (как в .env.example)
+    sim_reminder_interval_seconds: int = Field(
+        default=0,
+        validation_alias=AliasChoices(
+            "sim_reminder_interval_seconds", "SIM_REMINDER_INTERVAL"
+        ),
+    )
 
     # планировщик (тик проверки «пора ли»; компенсирует шаг интервалов)
     scheduler_tick_seconds: int = 5
 
     # TTL снимков для diff (сек)
     snapshot_ttl_seconds: int = 24 * 3600
+
+    # максимальный размер вложения, МБ (вложение скачивается целиком в память —
+    # большие файлы могут уронить процесс на сервере с малой RAM; такие
+    # вложения пропускаются с уведомлением пользователя)
+    attachment_max_size_mb: int = 35
 
     # начальные глобальные настройки: импортируются в БД при первом запуске
     # (global_settings пуста); дальше меняются из админки и живут в БД

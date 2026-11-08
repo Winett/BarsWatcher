@@ -205,7 +205,7 @@ def run_cache_checks() -> None:
             )
         check(calls == ["user1", "user2"], "<1КБ: per-user (два скачивания)")
 
-        # 2. файл >= 1 КБ: общий кэш — второй пользователь не качает
+        # 2. файл >= 1.5 КБ с id: общий кэш — второй пользователь не качает
         calls.clear()
         for user in (1, 2):
             await cache.get_or_download(
@@ -215,7 +215,7 @@ def run_cache_checks() -> None:
                 user_id=user,
                 download=await download(f"user{user}", b"y" * 4096),
             )
-        check(calls == ["user1"], ">=1КБ: общий кэш (одно скачивание)")
+        check(calls == ["user1"], ">=1.5КБ c id: общий кэш (одно скачивание)")
 
         # 3. повторное прикрепление — сразу из кэша
         calls.clear()
@@ -228,7 +228,48 @@ def run_cache_checks() -> None:
         )
         check(calls == [] and path.exists(), "повтор: файл прикрепляется без скачивания")
 
-        # 4. TTL: просроченные файлы удаляются
+        # 4. расчётный листок 1.2 КБ: даже с id — НЕ шарится (личные данные)
+        calls.clear()
+        for user in (1, 2):
+            await cache.get_or_download(
+                attachment_id="payslip-1",
+                filename="raschet.txt",
+                size=1200,
+                user_id=user,
+                download=await download(f"user{user}", b"p" * 1200),
+            )
+        check(calls == ["user1", "user2"], "1.2КБ (листок): per-user, без шаринга")
+
+        # 5. большой файл БЕЗ attachment_id: имя файла совпадает у студентов —
+        #    шарить нельзя, только персональный кэш
+        calls.clear()
+        for user in (1, 2):
+            await cache.get_or_download(
+                attachment_id="",
+                filename="dopusk2.pdf",
+                size=182340,
+                user_id=user,
+                download=await download(f"user{user}", b"z" * 4096),
+            )
+        check(calls == ["user1", "user2"], "без id: per-user даже для больших")
+
+        # 6. гонка: конкурентные запросы одного файла — одно скачивание
+        calls.clear()
+        slow = await download("slow", b"s" * 4096)
+
+        async def fetch(user: int) -> None:
+            await cache.get_or_download(
+                attachment_id="race-1",
+                filename="race.bin",
+                size=182340,
+                user_id=user,
+                download=slow,
+            )
+
+        await asyncio.gather(fetch(1), fetch(2), fetch(3))
+        check(calls == ["slow"], "гонка: скачан один раз, остальные взяли из кэша")
+
+        # 7. TTL: просроченные файлы удаляются
         removed = cache.cleanup(now=path.stat().st_mtime + 601)
         check(removed >= 1 and not path.exists(), "TTL: просроченные файлы удалены")
 
