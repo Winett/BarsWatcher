@@ -30,6 +30,10 @@ def profile_stale(row, *, max_age: timedelta = timedelta(hours=24)) -> bool:
     сохранены до запуска этого процесса."""
     if row is None:
         return True
+    if not getattr(row, "fio", None) and not getattr(row, "group", None):
+        # профиль сохранился пустым (парсер не разобрал ответ) — повторяем при
+        # каждой удачной проверке, не дожидаясь суточного TTL
+        return True
     updated = getattr(row, "updated_at", None)
     if updated is None:
         return True
@@ -46,7 +50,10 @@ async def save_bars_profile(uow, user_id: int, profile) -> None:
     if row is None:
         row = BarsProfile(user_id=user_id)
         await uow.bars_profile.add(row)
-        changes = ["создана запись"]
+        # сразу видно, разобрался ли профиль (иначе «пустая» запись маскируется)
+        changes = [
+            f"создана запись | ФИО: {profile.fio or '—'} | группа: {profile.group or '—'}"
+        ]
     else:
         changes = []
         for field, title in (
@@ -64,3 +71,9 @@ async def save_bars_profile(uow, user_id: int, profile) -> None:
         row.is_journal_responsible = bool(profile.is_journal_responsible)
     if changes:
         log.info("профиль БАРС обновлён | user={} | {}", user_id, "; ".join(changes))
+    if not profile.fio and not profile.group:
+        # парсер не нашёл данные — раньше это пряталось за «создана запись»
+        log.warning(
+            "профиль БАРС сохранён пустым (ФИО/группа не разобраны) | user={}",
+            user_id,
+        )

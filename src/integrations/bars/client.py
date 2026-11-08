@@ -11,6 +11,7 @@ from src.integrations.models import (
     DisciplineMarks,
     LessonInfo,
     ScheduleItem,
+    StudentBrief,
     StudentProfile,
     TwoFASendResult,
 )
@@ -108,18 +109,39 @@ class BarsWebClient:
         """
         group = await self._with_relogin(self._api.get_study_group_page, parse_study_group)
         if not group.sg_id:
-            # не удалось определить группу — считаем неответственным (мягко)
-            log.warning("не удалось определить sg_id для проверки ответственного")
+            # не удалось определить группу — считаем неответственным (мягко);
+            # для обычных студентов это норма, а не ошибка
+            log.debug("не удалось определить sg_id для проверки ответственного")
             return False
         html = await self._with_relogin(
             lambda: self._api.get_study_group_edit_page(group.sg_id), lambda h: h
         )
         return not access_forbidden(html)
 
-    async def fetch_profile(self) -> StudentProfile:
-        # группа берётся из ListStudent (доступно всем студентам);
-        # право ответственного — по доступу к EditStudyGroup (см. is_journal_responsible)
+    async def _fetch_brief(self) -> StudentBrief:
+        """StudentBrief: partial-таблица студентов, запасной вариант — полная страница.
+
+        ListStudent наполняет таблицу через JS (data-q-href на _PartialListStudent):
+        в HTML полной страницы у части пользователей tbody пустой, поэтому
+        сначала берём сам partial.
+        """
+        brief = await self._with_relogin(
+            self._api.get_student_partial, parse_student_brief
+        )
+        if brief.fio or brief.student_id or brief.group:
+            return brief
         brief = await self._with_relogin(self._api.get_student_page, parse_student_brief)
+        if not brief.fio and not brief.student_id:
+            log.warning(
+                "профиль: не удалось разобрать список студентов "
+                "(tbl__PartialListStudent пуст и в partial, и в полной странице)"
+            )
+        return brief
+
+    async def fetch_profile(self) -> StudentProfile:
+        # группа берётся из списка студентов (доступно всем);
+        # право ответственного — по доступу к EditStudyGroup (см. is_journal_responsible)
+        brief = await self._fetch_brief()
         group = await self._with_relogin(self._api.get_study_group_page, parse_study_group)
         responsible = await self.is_journal_responsible()
         return StudentProfile(
@@ -184,8 +206,8 @@ class BarsWebClient:
         self, date_from: date, date_to: date, group_name: str | None = None
     ) -> list[ScheduleItem]:
         if group_name is None:
-            # название группы из ListStudent — доступно всем, не только старостам
-            brief = await self._with_relogin(self._api.get_student_page, parse_student_brief)
+            # название группы из списка студентов — доступно всем, не только старостам
+            brief = await self._fetch_brief()
             group_name = brief.group
         if not group_name:
             raise AuthError("не удалось определить название группы")
@@ -197,7 +219,7 @@ class BarsWebClient:
     # ───────────────────────────── внутреннее ─────────────────────────────
 
     async def _student_id(self) -> str:
-        brief = await self._with_relogin(self._api.get_student_page, parse_student_brief)
+        brief = await self._fetch_brief()
         if not brief.student_id:
             raise AuthError("не удалось получить studentID")
         return brief.student_id

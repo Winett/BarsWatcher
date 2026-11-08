@@ -43,6 +43,15 @@ class BarsApi:
 
     # ───────────────────────────── профиль ─────────────────────────────
 
+    async def get_student_partial(self) -> str:
+        """Таблица студентов напрямую (partial-эндпоинт).
+
+        Страница ListStudent наполняет таблицу через JS (data-q-href указывает
+        сюда же) — в её HTML у части пользователей tbody пустой, поэтому
+        каноничный источник данных — сам partial.
+        """
+        return await self._get("/bars_web/ST/Student/_PartialListStudent")
+
     async def get_student_page(self) -> str:
         return await self._get("/bars_web/ST/Student/ListStudent")
 

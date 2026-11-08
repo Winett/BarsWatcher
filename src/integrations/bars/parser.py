@@ -193,25 +193,44 @@ def access_forbidden(html: str) -> bool:
 def parse_student_brief(html: str) -> StudentBrief:
     """Студент из tbl__PartialListStudent: studentID + ФИО + группа.
 
-    Группа берётся из 4-го столбца (доступна всем, в отличие от
-    StudyGroup/ListStudyGroup — там доступ только у старост/замов).
+    Столбец группы определяется по шапке (data-col-name="sg_DisplayName") —
+    набор столбцов у разных ролей может различаться; запасной вариант —
+    4-й столбец (ФИО, зачётка, статус, группа). Группа доступна всем,
+    в отличие от StudyGroup/ListStudyGroup (там доступ только у старост/замов).
     """
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table", id="tbl__PartialListStudent")
     if table is None:
+        logger.debug("parse_student_brief: таблица tbl__PartialListStudent не найдена")
         return StudentBrief()
     tbody = table.find("tbody")
     if tbody is None:
+        logger.debug("parse_student_brief: нет строк в таблице студентов")
         return StudentBrief()
+
+    # индекс столбца группы — по шапке (запасной вариант: 4-й столбец)
+    group_idx = 3
+    head_row = table.select_one("thead tr")
+    if head_row is not None:
+        names: list[str] = []
+        for th in head_row.find_all("th"):
+            anchor = th.find("a", attrs={"data-col-name": True})
+            names.append((anchor.get("data-col-name") or "").strip() if anchor else "")
+        if "sg_DisplayName" in names:
+            group_idx = names.index("sg_DisplayName")
+
     row = tbody.find("tr")
-    link = row.find("a") if row is not None else None
+    link = row.find("a", href=STUDENT_ID_RE) if row is not None else None
     if link is None:
+        link = row.find("a") if row is not None else None
+    if link is None:
+        logger.debug("parse_student_brief: в строке нет ссылки на студента")
         return StudentBrief()
     match = STUDENT_ID_RE.search(link.get("href") or "")
     cells = row.find_all("td") if row is not None else []
     group = None
-    if len(cells) >= 4:
-        group = normalize(cells[3].get_text()) or None
+    if len(cells) > group_idx:
+        group = normalize(cells[group_idx].get_text()) or None
     return StudentBrief(
         student_id=match.group(1) if match else None,
         fio=normalize(link.get_text()) or None,
@@ -362,13 +381,14 @@ def parse_study_group(html: str) -> StudyGroupInfo:
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table", id="tbl__PartialListStudyGroup")
     if table is None:
-        logger.warning("parse_study_group: таблица tbl__PartialListStudyGroup не найдена")
+        # для неответственных эта таблица не отдаётся — это норма, не ошибка
+        logger.debug("parse_study_group: таблица tbl__PartialListStudyGroup не найдена")
         return StudyGroupInfo()
     tbody = table.find("tbody")
     row = tbody.find("tr") if tbody is not None else None
     link = row.find("a") if row is not None else None
     if link is None:
-        logger.warning("parse_study_group: нет ссылки в первой строке таблицы")
+        logger.debug("parse_study_group: нет ссылки в первой строке таблицы")
         return StudyGroupInfo()
     match = SG_ID_RE.search(link.get("href") or "")
     result = StudyGroupInfo(
@@ -376,9 +396,9 @@ def parse_study_group(html: str) -> StudyGroupInfo:
         name=normalize(link.get_text()) or None,
     )
     if not result.sg_id:
-        logger.warning("parse_study_group: sg_id не найден в href={}", link.get("href"))
+        logger.debug("parse_study_group: sg_id не найден в href={}", link.get("href"))
     if not result.name:
-        logger.warning("parse_study_group: название группы пустое")
+        logger.debug("parse_study_group: название группы пустое")
     return result
 
 
