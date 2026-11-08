@@ -89,15 +89,42 @@ cp .env.example .env   # заполнить; SECRET_KEY — финальный
 
 Дальше — шаги 2–5 ниже; обе БД видны с хоста (`localhost:5432` — старая,
 `localhost:5433` — новая), поэтому миграционный скрипт можно запустить прямо
-на хосте (нужен `uv`) либо контейнером (без установки чего-либо):
+на хосте (нужен `uv`) либо контейнером (без установки чего-либо).
+
+Для запуска из контейнера добавьте в сервис `bot` нового compose-файла
+маппинг хоста. Флаг `--add-host` у `docker compose run` поддерживают не все
+версии compose, а `extra_hosts` работает везде:
+
+```yaml
+  bot:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+```
 
 ```bash
 # из папки BarsWatcher-v2; старая БД видна с контейнера через host-gateway
-docker compose run --rm \
-  --add-host host.docker.internal:host-gateway \
-  bot python scripts/migrate_from_master.py \
+docker compose run --rm bot python scripts/migrate_from_master.py \
     --old-db-url 'postgresql+asyncpg://adminn:123123@host.docker.internal:5432/BarsWatcher' \
     --new-db-url 'postgresql+asyncpg://barswatcher:barswatcher@postgres:5432/barswatcher'
+```
+
+Альтернатива без `extra_hosts` — подставить IP шлюза Docker-сети напрямую
+(обе БД через опубликованные порты хоста 5432/5433):
+
+```bash
+GW=$(docker network inspect barswatcher-v2_default \
+       -f '{{(index .IPAM.Config 0).Gateway}}')
+docker compose run --rm bot python scripts/migrate_from_master.py \
+    --old-db-url "postgresql+asyncpg://adminn:123123@$GW:5432/BarsWatcher" \
+    --new-db-url "postgresql+asyncpg://barswatcher:barswatcher@$GW:5433/barswatcher"
+```
+
+Либо с хоста, без Docker-сетей вовсе (нужен `uv`):
+
+```bash
+uv run python scripts/migrate_from_master.py \
+    --old-db-url 'postgresql+asyncpg://adminn:123123@localhost:5432/BarsWatcher' \
+    --new-db-url 'postgresql+asyncpg://barswatcher:barswatcher@localhost:5433/barswatcher'
 ```
 
 Держите оба стенда работающими до проверки; перед запуском нового бота
