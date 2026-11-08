@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from aiogram import Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
+from loguru import logger
 
 from .admin import router as admin_router
 from .handlers import build_router
@@ -13,8 +14,18 @@ from .stale_guard import StaleUpdateMiddleware
 __all__ = ["build_dispatcher"]
 
 
+async def _on_error(event) -> bool:
+    """Ошибка хендлера — в лог-файл с traceback (не только в stderr aiogram)."""
+    logger.opt(exception=event.exception).error(
+        "ошибка обработки апдейта | update_id={}",
+        getattr(event.update, "update_id", "?"),
+    )
+    return True  # обработано: пользователю ничего не шлём (как и раньше)
+
+
 def build_dispatcher() -> Dispatcher:
     dp = Dispatcher(storage=MemoryStorage())
+    dp.errors.register(_on_error)
     # после сна ПК Telegram отдаёт обновления повторно — отсекаем дубликаты
     # и устаревшие сообщения
     dp.update.outer_middleware(StaleUpdateMiddleware())

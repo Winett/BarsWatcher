@@ -29,6 +29,16 @@ from src.services.admins import (
 from src.services.attachments import AttachmentCache, cleanup_loop
 
 
+async def _guarded(name: str, coro) -> None:
+    """Фоновая задача: неожиданная смерть попадает в лог с traceback (не молча)."""
+    try:
+        await coro
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.exception("фоновая задача '{}' упала", name)
+
+
 async def main() -> None:
     setup_logging(settings.debug)
     # первый запуск: импорт админов и глобальных настроек из .env
@@ -50,14 +60,18 @@ async def main() -> None:
             BotCommand(command="suggestion", description="Предложение администратору"),
         ]
     )
-    cleanup_task = asyncio.create_task(cleanup_loop(AttachmentCache()))
+    cleanup_task = asyncio.create_task(
+        _guarded("cleanup вложений", cleanup_loop(AttachmentCache()))
+    )
     # логи админам каждый день в 00:00 МСК (как в main-ветке)
-    logsend_task = asyncio.create_task(daily_log_send_loop(bot))
+    logsend_task = asyncio.create_task(
+        _guarded("отправка логов", daily_log_send_loop(bot))
+    )
     # воркер очереди `bot`: события (marks.changed и пр.) → уведомления;
     # работает в этом же event loop, поэтому не run_worker (свой loop),
     # а Worker.async_run() фоновой задачей
     queue_worker = create_bot_worker()
-    queue_task = asyncio.create_task(queue_worker.async_run())
+    queue_task = asyncio.create_task(_guarded("очередь bot", queue_worker.async_run()))
     logger.info(
         "бот запущен (long polling + очередь bot), integration_mode={}",
         settings.integration_mode,
@@ -65,6 +79,10 @@ async def main() -> None:
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
+    except Exception:
+        # любая необработанная ошибка — в лог-файл с traceback, дальше наверх
+        logger.exception("бот остановлен с ошибкой")
+        raise
     finally:
         cleanup_task.cancel()
         logsend_task.cancel()

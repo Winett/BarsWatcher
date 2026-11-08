@@ -223,6 +223,11 @@ async def on_auth_2fa_submitted(event: Auth2FASubmitted) -> None:
 
         _save_session(state, client)
         if result.status == AuthStatus.OK:
+            log.info(
+                "статус bars изменён: {} → active | user={} | код 2FA принят",
+                getattr(state.status, "value", state.status) or "—",
+                event.user_id,
+            )
             state.status = WatchStates.ACTIVE
             state.last_error_message = None
             # после успешного входа профиль перепроверяется всегда (п.7):
@@ -620,6 +625,11 @@ async def _enter_2fa(uow, state, client, user_id: int) -> None:
         destination = send_result.destination
     except (ServiceUnavailableError, AuthError, DataParseError) as error:
         log.warning("не удалось отправить код 2FA: {}", error)
+    log.info(
+        "статус bars изменён: {} → waiting_2fa | user={} | нужен код 2FA",
+        getattr(state.status, "value", state.status) or "—",
+        user_id,
+    )
     state.status = WatchStates.WAITING_2FA
     _save_session(state, client)
     await uow.commit()
@@ -805,6 +815,12 @@ async def _on_iteration_error(
 async def _on_auth_failed(
     uow, state, now: datetime, user_id: int, service: ServiceKind
 ) -> None:
+    log.info(
+        "статус {} изменён: {} → invalid_creds | user={} | сервер отклонил креды",
+        service.value,
+        getattr(state.status, "value", state.status) or "—",
+        user_id,
+    )
     state.status = WatchStates.INVALID_CREDS
     state.last_error_message = "Неверный логин или пароль"
     state.last_error_datetime = now

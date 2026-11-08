@@ -30,7 +30,8 @@ def setup_logging(debug: bool = False) -> None:
         log_dir / "barswatcher_{time:YYYY-MM-DD}.log",
         rotation="00:00",
         retention="14 days",
-        level="DEBUG",
+        # DEBUG пишется в файл только при DEBUG=1 — иначе логи разрастаются
+        level=level,
         encoding="utf-8",
         # модуль:строка — чтобы сразу видеть, где именно сработало
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {extra[component]: <12} | {name}:{line} | {message}",
