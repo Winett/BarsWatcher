@@ -56,10 +56,6 @@ CODE_TTL = timedelta(minutes=5)  # сколько живёт ввод кода 2
 AUTH_TIMEOUT = 90.0  # потолок на авторизацию с ретраями внутри клиента
 _SERVICES = {"bars": ServiceKind.BARS, "osep": ServiceKind.OSEP}
 
-# клиенты живут в процессе бота: 2FA-флоу требует одного и того же клиента
-_clients: dict[tuple[str, int], object] = {}
-
-
 class LoginFlow(StatesGroup):
     waiting_login = State()
     waiting_password = State()
@@ -74,13 +70,11 @@ class BlacklistFlow(StatesGroup):
 
 
 def _client(service: str, user_id: int):
-    key = (service, user_id)
-    if key not in _clients:
-        if service == "bars":
-            _clients[key] = get_bars_client(user_id)
-        else:
-            _clients[key] = get_osep_client(user_id)
-    return _clients[key]
+    # клиент один на пользователя (кэш в src.integrations): 2FA-флоу требует
+    # одного и того же клиента между сообщениями; сессии переживают в БД
+    if service == "bars":
+        return get_bars_client(user_id)
+    return get_osep_client(user_id)
 
 
 async def _publish_check(db_id: int, service: str) -> None:
@@ -130,6 +124,7 @@ async def _load_panel_data(service: str, telegram_id: int) -> dict:
     available, available_since = await _service_status(kind)
     return {
         "watching": watching,
+        "status": state.status if state else None,
         "available": available,
         "available_since": available_since,
         "last_check": last_check,
@@ -143,8 +138,9 @@ async def _render_panel(message: Message, service: str, telegram_id: int) -> Non
     text = panels.service_panel_text(
         service,
         watching=data["watching"],
+        status=data["status"],
         available=data["available"],
-        available_since=None,
+        available_since=data["available_since"],
         last_check=data["last_check"],
         login=data["login"],
     )
@@ -757,7 +753,20 @@ async def cmd_statistic(message: Message) -> None:
                 OsepCredentials.login.is_not(None)
             )
         )).scalar() or 0
-    await message.answer(panels.statistic_text(total, with_bars, with_osep))
+        # «используют» = отслеживание реально включено (статус ACTIVE)
+        active_bars = (await session.execute(
+            select(func.count()).select_from(BarsState).where(
+                BarsState.status == WatchStates.ACTIVE
+            )
+        )).scalar() or 0
+        active_osep = (await session.execute(
+            select(func.count()).select_from(OsepState).where(
+                OsepState.status == WatchStates.ACTIVE
+            )
+        )).scalar() or 0
+    await message.answer(
+        panels.statistic_text(total, with_bars, with_osep, active_bars, active_osep)
+    )
 
 
 # ─────────────────────────────── помощники ───────────────────────────────
@@ -863,6 +872,7 @@ async def _set_watching(
             if obj is None:
                 obj = OsepState(user_id=db_id)
                 await uow.osep_state.add(obj)
+        old_status = obj.status
         if waiting_2fa:
             obj.status = WatchStates.WAITING_2FA
         elif watching:
@@ -872,6 +882,15 @@ async def _set_watching(
             obj.next_check = datetime.now(UTC) + timedelta(seconds=60)
         else:
             obj.status = WatchStates.INACTIVE
+        if old_status != obj.status:
+            # переход статуса в лог: видно, кто и когда его поменял (п.3)
+            logger.info(
+                "статус {} изменён: {} → {} | tg={}",
+                service,
+                getattr(old_status, "value", old_status) or "—",
+                obj.status.value,
+                telegram_id,
+            )
         await uow.commit()
     if watching and service == "osep":
         # включение ОСЭП = новая база: счётчики папок запоминаются без

@@ -52,6 +52,18 @@ def _fmt_time(value: datetime | None) -> str:
     return fmt_time(value)
 
 
+def _state(value) -> WatchStates | None:
+    """Нормализовать статус из БД (на случай строкового значения)."""
+    if value is None:
+        return None
+    if isinstance(value, WatchStates):
+        return value
+    try:
+        return WatchStates(str(value).lower())
+    except ValueError:
+        return None
+
+
 def service_panel_text(
     service: str,
     *,
@@ -60,23 +72,46 @@ def service_panel_text(
     available_since: datetime | None,
     last_check: datetime | None,
     login: str | None,
+    status: WatchStates | str | None = None,
 ) -> str:
+    """Текст панели. Статус показывается явно: «ожидает 2FA» или «неверный
+    логин» — это НЕ «выключено», хотя проверки и приостановлены."""
     title = _SERVICE_TITLES.get(service, service)
-    status = f"{_status_emoji(available)} {'работает' if available else 'не работает'}"
-    if watching:
-        return (
-            f"Отслеживание {title}: ✅ Включено\n\n"
-            f"Состояние {title}: {status}"
-            f"{'' if available else f' (с {_fmt_time(available_since)})'}\n\n"
-            f"Время последней проверки: {fmt_datetime(last_check)}\n\n"
-            f"Логин: {login or 'Нет'}"
-        )
-    return (
-        f"Отслеживание {title}: ❌ Выключено\n\n"
-        f"Состояние {title}: {status}\n\n"
-        f"Логин: {login or 'Нет'}\n\n"
-        f"Если {title} не работает, временно не получится подключить эту функцию"
+    state = _state(status)
+    link = f"{_status_emoji(available)} {'работает' if available else 'не работает'}"
+    link_line = f"Состояние {title}: {link}"
+    if not available:
+        link_line += f" (с {_fmt_time(available_since)})"
+    footer = (
+        f"{link_line}\n\n"
+        f"Время последней проверки: {fmt_datetime(last_check)}\n\n"
+        f"Логин: {login or 'Нет'}"
     )
+
+    if watching or state == WatchStates.ACTIVE:
+        head = f"Отслеживание {title}: ✅ Включено\n\n"
+    elif state == WatchStates.WAITING_2FA:
+        head = (
+            f"Отслеживание {title}: 🔐 Требуется код 2FA\n\n"
+            "Проверки приостановлены, пока код не введён. Нажмите «✅ Включить» "
+            "и следуйте подсказке — или используйте кнопку из уведомления.\n\n"
+        )
+    elif state == WatchStates.INVALID_CREDS:
+        head = (
+            f"Отслеживание {title}: ❌ Неверный логин или пароль\n\n"
+            "Обновите данные кнопкой «🔑 Изменить данные для входа».\n\n"
+        )
+    elif state == WatchStates.INITIAL:
+        head = (
+            f"Отслеживание {title}: ⚪ Не настроено\n\n"
+            "Нажмите «✅ Включить», чтобы начать отслеживание.\n\n"
+        )
+    else:
+        head = (
+            f"Отслеживание {title}: ❌ Выключено\n\n"
+            f"Если {title} не работает, временно не получится подключить эту функцию.\n\n"
+        )
+    return head + footer
 
 
 def bars_settings_text(
@@ -129,11 +164,20 @@ def services_text(bars: tuple[bool, datetime | None], osep: tuple[bool, datetime
     return "\n\n".join([line("БАРС", bars), line("ОСЭП", osep)])
 
 
-def statistic_text(total: int, with_bars: int, with_osep: int) -> str:
+def statistic_text(
+    total: int,
+    with_bars: int,
+    with_osep: int,
+    active_bars: int = 0,
+    active_osep: int = 0,
+) -> str:
+    """Данные — у кого введён логин; используют — у кого включено отслеживание."""
     return (
         f"Всего людей в боте: {total}\n\n"
-        f"Используют БАРС: {with_bars}\n\n"
-        f"Используют ОСЭП: {with_osep}"
+        f"Данных БАРС: {with_bars}\n"
+        f"Используют БАРС: {active_bars}\n\n"
+        f"Данных ОСЭП: {with_osep}\n"
+        f"Используют ОСЭП: {active_osep}"
     )
 
 
