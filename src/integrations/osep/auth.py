@@ -58,6 +58,8 @@ class OwaAuth:
             timeout=timeout,
             follow_redirects=False,
             verify=False,  # как в master: TLS корпоративной почты не проверяется
+            # маленький пул: экономия памяти на сервере (последовательные запросы)
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=4),
             headers={"User-Agent": USER_AGENT},
         )
         attach_http_logging(self._client, "ОСЭП")

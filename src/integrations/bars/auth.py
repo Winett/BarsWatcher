@@ -136,6 +136,9 @@ class BarsAuth:
             base_url=self.BASE_URL,
             timeout=timeout,
             follow_redirects=False,
+            # маленький пул: запросы идут последовательно, а память на сервере
+            # ограничена (по умолчанию httpx держит до 100 соединений на клиента)
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=4),
             headers={
                 "User-Agent": (
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
