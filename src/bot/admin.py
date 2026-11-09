@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramForbiddenError
@@ -64,6 +64,8 @@ _GLOBAL_INT_FIELDS = {
     "max_poll_interval_seconds": "Максимальный интервал, сек",
     "request_timeout_seconds": "Таймаут запроса, сек",
     "error_timeout_seconds": "Таймаут ошибки, сек",
+    # меняется на лету (worker подхватывает без перезапуска); «—» = из .env
+    "worker_max_jobs": "Параллельных проверок (воркеров)",
 }
 _GLOBAL_BOOL_FIELDS = {
     "auto_scale_enabled": "Авто-масштабирование интервала",
@@ -506,6 +508,8 @@ async def _user_card_text(user_id: int) -> tuple[str, InlineKeyboardMarkup] | No
     rows.append([_btn("Сбросить кастомные настройки опроса", f"adm:uovclear:{user_id}:all")])
     rows.append([_btn("🔎 Найти другого", "adm:userfind")])
     rows.append([_btn("◀️ Назад", "adm:menu")])
+    # отметка времени: устаревшую карточку видно сразу (данные меняются)
+    lines.append(f"⏱ Карточка от: {fmt_dt(datetime.now(UTC))} МСК")
     return "\n".join(lines), _kb(rows)
 
 

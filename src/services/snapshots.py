@@ -24,10 +24,6 @@ class SnapshotStore:
     def absences_key(user_id: int) -> str:
         return f"snapshot:absences:{user_id}"
 
-    @staticmethod
-    def folders_key(user_id: int) -> str:
-        return f"snapshot:folders:{user_id}"
-
     async def get(self, key: str) -> dict | None:
         raw = await self.redis.get(key)
         if raw is None:

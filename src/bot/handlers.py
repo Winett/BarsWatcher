@@ -880,6 +880,10 @@ async def _set_watching(
             # ближайшая проверка идёт сразу по CheckRequested (выше), поэтому
             # планировщику ставим обычный интервал — чтобы не дублировать её
             obj.next_check = datetime.now(UTC) + timedelta(seconds=60)
+            if service == "osep":
+                # включение ОСЭП = новая база: счётчики папок запоминаются без
+                # уведомлений о «новых» письмах, копившихся в папках раньше
+                obj.folder_counts = None
         else:
             obj.status = WatchStates.INACTIVE
         if old_status != obj.status:
@@ -892,13 +896,6 @@ async def _set_watching(
                 telegram_id,
             )
         await uow.commit()
-    if watching and service == "osep":
-        # включение ОСЭП = новая база: счётчики папок запоминаются без
-        # уведомлений о «новых» письмах, копившихся в папках раньше
-        from src.services.snapshots import SnapshotStore
-
-        redis = await get_redis()
-        await redis.delete(SnapshotStore.folders_key(db_id))
 
 
 async def _save_session(service: str, db_id: int, client) -> None:

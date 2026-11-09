@@ -24,6 +24,10 @@ class GlobalSettings(Base, TimestampMixin):
     notify_service_status: Mapped[bool] = mapped_column(Boolean, default=False)
     notify_new_users: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # параллельных проверок (воркеров); NULL = значение WORKER_MAX_JOBS из .env
+    # меняется из админки на лету, без перезапуска worker'а
+    worker_max_jobs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
 
 class UserOverride(Base, TimestampMixin):
     """Персональные переопределения: NULL в поле = взять глобальное значение."""

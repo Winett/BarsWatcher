@@ -548,8 +548,9 @@ async def check_mail(user_id: int) -> None:
         try:
             t1 = time.monotonic()
             counts = await client.fetch_folder_counts()
-            store = SnapshotStore(redis)
-            old = await store.get(store.folders_key(user_id))
+            # счётчики папок — в БД, но «живут» не дольше суток (аннулирование):
+            # есть свежие данные — сверяем и уведомляем; иначе — только база
+            old = _live_folder_counts(state)
             if old is None:
                 # первая проверка (или после включения ОСЭП): база папок
                 # запоминается без уведомлений — «старые» письма не шлём
@@ -586,7 +587,7 @@ async def check_mail(user_id: int) -> None:
                         )
                     )
                     sent += 1
-            await store.set(store.folders_key(user_id), counts)
+            state.folder_counts = {"saved_at": now.isoformat(), "counts": counts}
         except (ServiceUnavailableError, ConnectionError, TimeoutError) as error:
             await _on_iteration_error(
                 uow, state, poll, now, error,
@@ -695,6 +696,30 @@ def _save_session(state, client) -> None:
 _attachment_cache = AttachmentCache()  # общий каталог с ботом (attachments_cache/)
 
 SLOW_RESPONSE_MS = 5000  # дольше — предупреждение «медленный ответ»
+FOLDER_COUNTS_TTL = timedelta(hours=24)  # аннулирование счётчиков папок
+
+
+def _live_folder_counts(state) -> dict | None:
+    """Счётчики папок, если сохранены меньше суток назад; иначе None (новая база).
+
+    Аннулирование по времени — как TTL у снимка в Redis: письма,
+    «пропущенные» за сутки и более (включение спустя долгое время, долгий
+    простой), не прилетят штормом уведомлений при восстановлении.
+    """
+    data = state.folder_counts
+    if not isinstance(data, dict):
+        return None
+    counts = data.get("counts")
+    saved_at = data.get("saved_at")
+    if not isinstance(counts, dict) or not saved_at:
+        return None
+    try:
+        saved = datetime.fromisoformat(saved_at)
+    except (TypeError, ValueError):
+        return None
+    if saved.tzinfo is None:
+        saved = saved.replace(tzinfo=UTC)
+    return counts if datetime.now(UTC) - saved <= FOLDER_COUNTS_TTL else None
 
 
 def _user_tag(user, creds=None) -> str:

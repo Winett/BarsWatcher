@@ -31,6 +31,10 @@ class OsepState(Base, TimestampMixin):
     )
     status: Mapped[WatchStates] = mapped_column(default=WatchStates.INITIAL)
     cookies: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # счётчики папок для diff новых писем: {"saved_at": iso, "counts": {...}}.
+    # В БД (переживают перезапуск Redis — потеря Redis не «съедает» уведомления),
+    # но аннулируются через сутки: долгий простой не даёт шторма старых писем
+    folder_counts: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     current_interval_seconds: Mapped[int | None] = mapped_column(
         Integer, nullable=True
