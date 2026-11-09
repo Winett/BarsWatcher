@@ -68,7 +68,7 @@ def _extract_error_text(content: str) -> str | None:
     """Текст ошибки на вернувшейся странице входа (если сервер её показал)."""
     from bs4 import BeautifulSoup
 
-    soup = BeautifulSoup(content, "html.parser")
+    soup = BeautifulSoup(content, "lxml")
     # шаблоны уведомлений bootstrap-notify — не ошибки сервера
     for node in soup.select("[data-notify]"):
         node.decompose()

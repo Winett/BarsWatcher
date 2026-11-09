@@ -154,7 +154,7 @@ def normalize(text: str | None) -> str:
 
 def extract_token(html: str) -> str | None:
     """__RequestVerificationToken со страницы входа/2FA."""
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
     element = soup.find("input", {"name": "__RequestVerificationToken"})
     if element is not None and element.get("value"):
         return element["value"]
@@ -169,7 +169,7 @@ def extract_2fa_tid(html: str) -> str | None:
     af2_code_send('btnSend', '/bars_web/Auth/JSON_SendAF2_Code', '2', '4');
     Нужен второй элемент с конца — '2'.
     """
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
     button = soup.find("a", id="btnSend")
     if button is None:
         return None
@@ -198,7 +198,7 @@ def parse_student_brief(html: str) -> StudentBrief:
     4-й столбец (ФИО, зачётка, статус, группа). Группа доступна всем,
     в отличие от StudyGroup/ListStudyGroup (там доступ только у старост/замов).
     """
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
     table = soup.find("table", id="tbl__PartialListStudent")
     if table is None:
         logger.debug("parse_student_brief: таблица tbl__PartialListStudent не найдена")
@@ -248,7 +248,7 @@ def parse_marks(html: str) -> dict[str, DisciplineMarks]:
 
     marks[i] — оценка за КМ-(i+1); rewriting — переписывания этой оценки.
     """
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
     data: dict[str, DisciplineMarks] = {}
 
     for discipline in soup.find_all("div", attrs={"class": "my-2"}):
@@ -345,7 +345,7 @@ def parse_marks(html: str) -> dict[str, DisciplineMarks]:
 
 def parse_absences(html: str) -> dict[str, AbsenceRecord]:
     """Пропуски: {ключ (data-ls-id): AbsenceRecord}."""
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
     table = soup.find("table", id="tbl__PartialListStudent__Lesson__Student")
     data: dict[str, AbsenceRecord] = {}
     if table is None:
@@ -378,7 +378,7 @@ def parse_absences(html: str) -> dict[str, AbsenceRecord]:
 
 def parse_study_group(html: str) -> StudyGroupInfo:
     """Учебная группа: sg_id + название (первая строка списка)."""
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
     table = soup.find("table", id="tbl__PartialListStudyGroup")
     if table is None:
         # для неответственных эта таблица не отдаётся — это норма, не ошибка
@@ -404,7 +404,7 @@ def parse_study_group(html: str) -> StudyGroupInfo:
 
 def parse_leaders(html: str) -> list[str]:
     """Ответственные за журнал: логины вида public\\AkimovNA → ['AkimovNA']."""
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
     table = soup.find("table", id="tbl__PartialListStudyGroup_Leaders")
     if table is None:
         return []
@@ -434,7 +434,7 @@ def current_semester_title(today: date | None = None) -> str:
 
 def parse_training_journal_id(html: str, semester_title: str) -> int | None:
     """tjID учебного журнала нужного семестра (не всегда первая строка)."""
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
     table = soup.find("table", id="tbl__PartialListStudyGroup__TrainingJournals")
     if table is None:
         return None
@@ -454,7 +454,7 @@ def parse_training_journal_id(html: str, semester_title: str) -> int | None:
 
 def parse_lessons(html: str) -> list[LessonInfo]:
     """Занятия журнала: [LessonInfo]."""
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
     table = soup.find("table", id="tbl__PartialListTrainingJournal_Lessons")
     if table is None:
         return []
@@ -504,7 +504,7 @@ def parse_schedule(
 
     date_from/date_to — диапазон запроса: из него берётся год для подписи дня.
     """
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
     lessons: list[ScheduleItem] = []
     current_day = ""
     current_date = ""
