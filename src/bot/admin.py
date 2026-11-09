@@ -930,10 +930,26 @@ async def admin_find_user(message: Message, state: FSMContext) -> None:
         from src.db.models import User
 
         async with session_factory() as session:
-            user = (
-                await session.execute(select(User).where(User.username == query))
-            ).scalars().first()
-            user_id = user.id if user else None
+            matches = (
+                (await session.execute(select(User).where(User.username == query)))
+                .scalars()
+                .all()
+            )
+        if len(matches) > 1:
+            # username в Telegram не уникален в БД: несколько человек с одним
+            # @username = карточка «не того» — показываем всех со сверкой id
+            rows = [
+                [_btn(f"👤 id={u.id} · tg={u.telegram_id}", f"adm:user:{u.id}")]
+                for u in matches[:10]
+            ]
+            rows.append([_btn("◀️ Назад", "adm:menu")])
+            await message.answer(
+                f"«{query}» найдено пользователей: {len(matches)}.\n\n"
+                "Выберите нужного — сверьте telegram_id с реальным Telegram человека:",
+                reply_markup=_kb(rows),
+            )
+            return
+        user_id = matches[0].id if matches else None
     await state.clear()
     if user_id is None:
         await message.answer(f"Пользователь «{message.text.strip()}» не найден.")
