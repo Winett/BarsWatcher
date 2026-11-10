@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -28,15 +29,32 @@ from src.services.admins import (
 )
 from src.services.attachments import AttachmentCache, cleanup_loop
 
+HEALTHY_RUN_SECONDS = 60.0
 
-async def _guarded(name: str, coro) -> None:
-    """Фоновая задача: неожиданная смерть попадает в лог с traceback (не молча)."""
-    try:
-        await coro
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        logger.exception("фоновая задача '{}' упала", name)
+
+async def _supervised(name: str, factory) -> None:
+    """Фоновая задача под присмотром: упала (например, Redis перезапускался) —
+    перезапускаем с паузой, а не оставляем мёртвой до перезапуска бота.
+
+    Именно смерть потребителя очереди молча останавливала ВСЕ уведомления:
+    проверки шли, события падали в очередь, никто их не читал.
+    """
+    backoff = 5.0
+    while True:
+        started = time.monotonic()
+        try:
+            await factory()
+            return  # штатное завершение — для наших задач не ожидается
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "фоновая задача '{}' упала; перезапуск через {:.0f}с", name, backoff
+            )
+            if time.monotonic() - started > HEALTHY_RUN_SECONDS:
+                backoff = 5.0  # долго жила — ошибка разовая, пробуем сразу
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 60.0)
 
 
 async def main() -> None:
@@ -61,17 +79,21 @@ async def main() -> None:
         ]
     )
     cleanup_task = asyncio.create_task(
-        _guarded("cleanup вложений", cleanup_loop(AttachmentCache()))
+        _supervised("cleanup вложений", lambda: cleanup_loop(AttachmentCache()))
     )
     # логи админам каждый день в 00:00 МСК (как в main-ветке)
     logsend_task = asyncio.create_task(
-        _guarded("отправка логов", daily_log_send_loop(bot))
+        _supervised("отправка логов", lambda: daily_log_send_loop(bot))
     )
     # воркер очереди `bot`: события (marks.changed и пр.) → уведомления;
     # работает в этом же event loop, поэтому не run_worker (свой loop),
     # а Worker.async_run() фоновой задачей
     queue_worker = create_bot_worker()
-    queue_task = asyncio.create_task(_guarded("очередь bot", queue_worker.async_run()))
+    # потребитель очереди уведомлений — под присмотром: его смерть = тишина
+    # ВСЕХ уведомлений при живых проверках (так и было после падения Redis)
+    queue_task = asyncio.create_task(
+        _supervised("очередь bot", queue_worker.async_run)
+    )
     logger.info(
         "бот запущен (long polling + очередь bot), integration_mode={}",
         settings.integration_mode,
