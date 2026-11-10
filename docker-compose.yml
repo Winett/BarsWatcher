@@ -120,6 +120,22 @@ services:
     restart: unless-stopped
     logging: *rotated-logs
 
+  # автолечение: перезапуск зависших контейнеров (по их healthcheck'ам)
+  # Docker сам перезапускает УПАВШИЕ процессы (restart: unless-stopped), но не
+  # ЗАВИСШИЕ (живой процесс, который перестал отвечать) — это делает autoheal
+  autoheal:
+    image: willfarrell/autoheal:latest
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: "all" # следить за всеми контейнерами с healthcheck
+      AUTOHEAL_INTERVAL: 10 # проверять статус каждые 10 секунд
+      AUTOHEAL_START_PERIOD: 60 # не трогать контейнеры в первую минуту работы
+    volumes:
+      # «пульт» Docker-демона: через сокет autoheal видит статусы контейнеров
+      # и командует перезапуск (это единственный способ управлять Docker'ом)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    logging: *rotated-logs
+
 volumes:
   pgdata:
   redis_data:
