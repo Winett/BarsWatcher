@@ -47,6 +47,8 @@ _LOGON_FORM = {
 
 AUTH_ATTEMPTS = 2  # попытки входа: если сервер «заглючил» — пробуем ещё раз
 AUTH_ATTEMPT_TIMEOUT = 40.0  # жёсткий потолок одной попытки (сек)
+# проба доступности — быстрая: мёртвый сервис не должен держать слот воркера
+PROBE_TIMEOUT = 7.0
 
 
 class OwaAuth:
@@ -183,7 +185,8 @@ class OwaAuth:
     async def check_availability(self) -> bool:
         """<500 на health-URL — сервис жив (для дежурного мониторинга)."""
         try:
-            response = await self._client.get(HEALTH_PATH)
+            # короткий таймаут — см. bars.auth: мёртвый сервис не держит слот
+            response = await self._client.get(HEALTH_PATH, timeout=PROBE_TIMEOUT)
         except httpx.HTTPError as exc:
             logger.warning("ОСЭП: health-check не прошёл: {}", exc)
             return False

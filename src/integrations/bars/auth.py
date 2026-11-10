@@ -43,6 +43,8 @@ log = logger.bind(component="bars-auth")
 
 AUTH_ATTEMPTS = 2  # попытки входа: если сервис «заглючил» — пробуем ещё раз
 AUTH_ATTEMPT_TIMEOUT = 40.0  # жёсткий потолок одной попытки (сек)
+# проба доступности — быстрая: мёртвый сервис не должен держать слот воркера
+PROBE_TIMEOUT = 7.0
 
 
 def _raise_for_status(response: httpx.Response, what: str) -> None:
@@ -395,7 +397,11 @@ class BarsAuth:
 
     async def check_availability(self) -> bool:
         try:
-            response = await self._client.get(f"{self.APP}/", follow_redirects=False)
+            # короткий таймаут: живой сервис отвечает быстро, мёртвый — нет,
+            # и его ожидание не должно занимать слот проверки надолго
+            response = await self._client.get(
+                f"{self.APP}/", follow_redirects=False, timeout=PROBE_TIMEOUT
+            )
             return response.status_code < 500
         except httpx.HTTPError:
             return False

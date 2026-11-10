@@ -116,7 +116,9 @@ def get_bars_client(user_id: int) -> BarsClient:
         return FileSimBarsClient(user_id)
     from .bars import BarsWebClient
 
-    return _cached_client("bars", user_id, BarsWebClient)
+    return _cached_client(
+        "bars", user_id, lambda: BarsWebClient(timeout=settings.request_timeout_seconds)
+    )
 
 
 def get_osep_client(user_id: int) -> OsepClient:
@@ -128,4 +130,6 @@ def get_osep_client(user_id: int) -> OsepClient:
         return FileSimOsepClient(user_id)
     from .osep import OsepWebClient
 
-    return _cached_client("osep", user_id, OsepWebClient)
+    return _cached_client(
+        "osep", user_id, lambda: OsepWebClient(timeout=settings.request_timeout_seconds)
+    )

@@ -58,7 +58,9 @@ class Settings(BaseSettings):
     # (global_settings пуста); дальше меняются из админки и живут в БД
     poll_interval_seconds: int = 180
     max_poll_interval_seconds: int = 1800
-    request_timeout_seconds: int = 30
+    # таймаут обычного запроса к сервису: живой сервис отвечает быстро,
+    # мёртвый не должен держать слот проверки полминуты (см. также PROBE_TIMEOUT)
+    request_timeout_seconds: int = 10
     error_timeout_seconds: int = 300
     auto_scale_enabled: bool = True
     notify_service_status: bool = False
