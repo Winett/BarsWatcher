@@ -303,8 +303,10 @@ check(
 
 masked = apply_hidden_mark(changes)
 check(
-    masked[0]["hidden"] is True and masked[0]["new"] is None,
-    "скрытие оценки маскирует значения",
+    masked[0]["hidden"] is True
+    and masked[0]["new"] == changes[0]["new"]
+    and masked[0]["old"] == changes[0]["old"],
+    "скрытие оценки помечает hidden, но сохраняет значения (под спойлером)",
 )
 
 absence_row = {"lesson": "13.11.25, 3 пара, ...", "created": "17.12.25", "changed": ""}

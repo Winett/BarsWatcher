@@ -228,16 +228,20 @@ def diff_bars_absences(old: dict | None, new: dict) -> list[dict]:
 
 
 def apply_hidden_mark(changes: list[dict]) -> list[dict]:
-    """Скрыть значения оценок (настройка «скрывать оценку»).
+    """Скрыть оценки под спойлер (настройка «скрывать оценку»).
 
-    Маскирует только изменения оценок; пропуски не трогает.
+    Помечает изменения оценок флагом hidden — рендерер кладёт саму оценку
+    под <tg-spoiler> (видно после нажатия). Значения НЕ стираются: раньше
+    old/new обнулялись и в спойлер попадала «.» вместо оценки; заодно два
+    РАЗНЫХ изменения за день схлопывались в одинаковые словари и получали
+    один event_id — второе считалось дублем и терялось.
+
+    Пропуски не трогает.
     """
     masked = []
     for change in changes:
         item = dict(change)
         if item.get("kind") in _MARK_KINDS:
-            item["old"] = None
-            item["new"] = None
             item["hidden"] = True
         masked.append(item)
     return masked
