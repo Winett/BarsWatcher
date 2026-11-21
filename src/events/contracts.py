@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime
@@ -48,6 +50,19 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _stable_id(prefix: str, *parts: object) -> str:
+    """Детерминированный id события.
+
+    Повторная публикация того же содержимого (retry проверки после сбоя) даёт
+    ТОТ ЖЕ id — дедупликация в dispatch_event отбрасывает копию: уведомление
+    не теряется (событие публикуется до фиксации снимков) и не дублируется.
+    Дата в хеше: одинаковые события на следующий день — уже разные.
+    """
+    payload = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
+    digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:32]
+    return f"{prefix}:{digest}"
+
+
 @dataclass(kw_only=True)
 class Event:
     """Базовое событие. Поля event_id/occurred_at — идемпотентность и аудит."""
@@ -62,6 +77,18 @@ class Event:
         data = asdict(self)
         data["event_type"] = self.event_type
         return data
+
+    def task_key(self) -> str | None:
+        """Ключ «одна задача за раз» для enqueue_job (_job_id).
+
+        None — событие ставится всегда (случайный job_id). Задачи опроса
+        возвращают стабильный ключ: пока одна постановлена или выполняется,
+        повторная постановка отбрасывается (enqueue_job вернёт None) —
+        планировщик не плодит дубли даже при гонке/повторном тике.
+        После выполнения arq удаляет ключ задачи (keep_result=0) —
+        следующая постановка проходит штатно.
+        """
+        return None
 
     @classmethod
     def from_payload(cls, payload: dict) -> Event:
@@ -80,6 +107,12 @@ class PollDue(Event):
     user_id: int
     service: ServiceKind
 
+    def task_key(self) -> str | None:
+        # одна задача проверки на пользователя+сервис: пока поставленная
+        # проверка ждёт в очереди или выполняется, следующий тик планировщика
+        # НЕ ставит вторую (enqueue_job с тем же job_id вернёт None)
+        return f"check:{self.service.value}:{self.user_id}"
+
 
 @dataclass(kw_only=True)
 class CheckRequested(Event):
@@ -89,6 +122,11 @@ class CheckRequested(Event):
     target_queue: ClassVar[str] = QUEUE_WORKER
     user_id: int
     service: ServiceKind
+
+    def task_key(self) -> str | None:
+        # тот же ключ, что у PollDue: ручная проверка и плановая не плодят
+        # дубли друг друга — выполняется ближайшая поставленная
+        return f"check:{self.service.value}:{self.user_id}"
 
 
 # ─────────────────────────── события bot-очереди ───────────────────────────
@@ -103,6 +141,11 @@ class MarksChanged(Event):
     user_id: int
     changes: list[dict]
 
+    def __post_init__(self) -> None:
+        self.event_id = _stable_id(
+            "marks", self.occurred_at[:10], self.user_id, self.changes
+        )
+
 
 @dataclass(kw_only=True)
 class AbsencesChanged(Event):
@@ -112,6 +155,11 @@ class AbsencesChanged(Event):
     target_queue: ClassVar[str] = QUEUE_BOT
     user_id: int
     changes: list[dict]
+
+    def __post_init__(self) -> None:
+        self.event_id = _stable_id(
+            "absences", self.occurred_at[:10], self.user_id, self.changes
+        )
 
 
 @dataclass(kw_only=True)
@@ -123,6 +171,23 @@ class MailReceived(Event):
     user_id: int
     folder: str
     mail: dict  # {subject, sender_name, sender_email, body, attachments: [...]}
+
+    def __post_init__(self) -> None:
+        mail = self.mail or {}
+        self.event_id = _stable_id(
+            "mail",
+            self.occurred_at[:10],
+            self.user_id,
+            self.folder,
+            mail.get("subject"),
+            mail.get("sender_email"),
+            mail.get("body"),
+            # вложения — в хеше: два письма с одинаковыми темой/текстом, но
+            # разными файлами (например «Договор» с пустым телом) — РАЗНЫЕ
+            # события; у одного письма id вложений стабильны — повтор после
+            # сбоя даст тот же хеш и отсечётся как дубль
+            mail.get("attachments"),
+        )
 
 
 @dataclass(kw_only=True)
@@ -230,6 +295,11 @@ class ReminderDue(Event):
     target_queue: ClassVar[str] = QUEUE_BOT
     user_id: int
     issues: list[dict] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.event_id = _stable_id(
+            "reminder", self.occurred_at[:10], self.user_id, self.issues
+        )
 
 
 @dataclass(kw_only=True)

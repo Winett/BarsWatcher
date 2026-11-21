@@ -16,8 +16,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
 import os
+import random
 import time
 from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
@@ -280,11 +282,23 @@ async def on_auth_2fa_resend(event: Auth2FAResendRequested) -> None:
         )
 
 
+# одна проверка на пользователя за раз: при отстающей очереди планировщик
+# может поставить вторую задачу, пока первая ещё не выполнена — параллельные
+# проверки одного пользователя видят один и тот же «старый» снимок и дублируют
+# события (два уведомления об одном и том же письме)
+_check_locks: dict[tuple[str, int], object] = {}
+
+
 async def run_check(user_id: int, service: ServiceKind) -> None:
-    if service == ServiceKind.BARS:
-        await check_marks(user_id)
-    else:
-        await check_mail(user_id)
+    key = (service.value, user_id)
+    lock = _check_locks.setdefault(key, asyncio.Lock())
+    async with lock:
+        # вторая (задержавшаяся) проверка дождётся первой и увидит уже
+        # обновлённые счётчики — diff не найдёт роста, дублей не будет
+        if service == ServiceKind.BARS:
+            await check_marks(user_id)
+        else:
+            await check_mail(user_id)
 
 
 # ────────────────────────────── БАРС ──────────────────────────────
@@ -452,6 +466,8 @@ async def check_marks(user_id: int) -> None:
                 settings_row is None or settings_row.notify_absences
             ):
                 await publish(AbsencesChanged(user_id=user_id, changes=absence_changes))
+        # снимки фиксируем ПОСЛЕ публикации: сбой = повтор проверки досылает
+        # события (потери нет), детерминированные event_id дублей не дают
         await store.set(store.marks_key(user_id), marks_dict)
         await store.set(store.absences_key(user_id), absences_dict)
 
@@ -565,7 +581,7 @@ async def check_mail(user_id: int) -> None:
                 if user.osep_settings is not None
                 else []
             )
-            sent = 0
+            fresh: list[tuple[str, object]] = []
             for folder, delta in grown.items():
                 for mail in await client.fetch_new_mails(folder, delta):
                     if _is_blacklisted(mail.sender_email, blacklist):
@@ -581,12 +597,18 @@ async def check_mail(user_id: int) -> None:
                     # вложения скачиваем сразу (как в master): сессия свежая,
                     # бот отправит файлы из общего кэша без повторного входа
                     await _prefetch_attachments(user_id, mail.attachments, client)
-                    await publish(
-                        MailReceived(
-                            user_id=user_id, folder=folder, mail=asdict(mail)
-                        )
+                    fresh.append((folder, mail))
+            sent = 0
+            for folder, mail in fresh:
+                await publish(
+                    MailReceived(
+                        user_id=user_id, folder=folder, mail=asdict(mail)
                     )
-                    sent += 1
+                )
+                sent += 1
+            # счётчики фиксируем ПОСЛЕ публикации: сбой = повтор проверки
+            # досылает события (потери нет), а детерминированные event_id
+            # отсекают повторную публикацию (дублей тоже нет)
             state.folder_counts = {"saved_at": now.isoformat(), "counts": counts}
         except (ServiceUnavailableError, ConnectionError, TimeoutError) as error:
             await _on_iteration_error(
@@ -788,6 +810,12 @@ def _semester_label() -> str:
     return os.environ.get("SIM_SEMESTER") or current_semester_title()
 
 
+def _jitter(seconds: float) -> float:
+    """±15% к интервалу: проверки разных пользователей не сходятся в один
+    момент и не дают шквала запросов (раз в N минут у всех сразу)."""
+    return seconds * random.uniform(0.85, 1.15)
+
+
 def _schedule_next(state, poll, now: datetime, error: bool) -> None:
     """Интервал следующей проверки.
 
@@ -795,11 +823,14 @@ def _schedule_next(state, poll, now: datetime, error: bool) -> None:
     вовремя заметить восстановление. Успех: пока с последней ошибки не прошло
     3 минуты — те же 60с; как только 3 минуты идут только удачные запросы —
     стандартный интервал (пользовательский или глобальный).
+
+    Момент следующей проверки получает случайный джиттер — без него все
+    пользователи, «вставшие в ногу» однажды, ходят залпами навсегда.
     """
     if settings.integration_mode != "real":
         interval = settings.sim_poll_interval_seconds
         state.current_interval_seconds = interval
-        state.next_check = now + timedelta(seconds=interval)
+        state.next_check = now + timedelta(seconds=_jitter(interval))
         state.last_check_at = now
         if not error:
             state.last_success_at = now
@@ -807,7 +838,7 @@ def _schedule_next(state, poll, now: datetime, error: bool) -> None:
     if error:
         # упавший/недоступный сервис проверяем примерно раз в минуту
         state.current_interval_seconds = 60
-        state.next_check = now + timedelta(seconds=60)
+        state.next_check = now + timedelta(seconds=_jitter(60))
         state.last_check_at = now
         state.last_error_datetime = now  # отсчёт «3 минуты удачных»
         return
@@ -816,7 +847,7 @@ def _schedule_next(state, poll, now: datetime, error: bool) -> None:
     stable = last_error is None or (now - last_error) >= timedelta(minutes=3)
     current = poll.poll_interval_seconds if stable else 60
     state.current_interval_seconds = current
-    state.next_check = now + timedelta(seconds=current)
+    state.next_check = now + timedelta(seconds=_jitter(current))
     state.last_check_at = now
     state.last_success_at = now
 

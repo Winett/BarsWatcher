@@ -89,9 +89,23 @@ async def get_redis() -> ArqRedis:
 
 async def publish(event: Event) -> None:
     pool = await get_pool()
-    await pool.enqueue_job(
-        "dispatch_event", event.to_payload(), _queue_name=event.target_queue
+    job = await pool.enqueue_job(
+        "dispatch_event",
+        event.to_payload(),
+        _queue_name=event.target_queue,
+        # стабильный job_id (task_key): пока такая же задача ещё в очереди или
+        # выполняется — повторная постановка отбрасывается (enqueue_job → None);
+        # ключ задачи arq удаляет после выполнения (keep_result=0)
+        _job_id=event.task_key(),
     )
+    if job is None and event.task_key() is not None:
+        logger.debug(
+            "events | {} уже в очереди — повторная постановка пропущена ({} | user={})",
+            event.event_type,
+            event.task_key(),
+            getattr(event, "user_id", "?"),
+        )
+        return
     logger.debug(
         "events | опубликовано {} → очередь {} (event_id={})",
         event.event_type,

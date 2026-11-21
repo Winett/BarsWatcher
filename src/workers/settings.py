@@ -32,6 +32,14 @@ _SYNC_INTERVAL = 15  # как часто перечитывать лимит и�
 # присваиванием worker.max_jobs: arq проверяет его на каждой итерации цикла
 _worker_ref: list = []
 
+# фоновые задачи (планировщик/напоминания/лимит) живут НЕ в ctx, а здесь:
+# при аварийной остановке worker'а on_shutdown может не выполниться (close()
+# падает на недоступном Redis ещё ДО on_shutdown) — тогда старые задачи
+# остаются на event loop, и рестарт worker.py запускает ВТОРОЙ планировщик.
+# Второй планировщик = повторные задачи опроса. Регистр позволяет on_startup
+# отменить остатки предыдущего запуска перед стартом новых.
+_bg_tasks: list = []
+
 
 def set_worker(worker) -> None:
     _worker_ref.clear()
@@ -73,23 +81,37 @@ async def max_jobs_sync_loop() -> None:
         await asyncio.sleep(_SYNC_INTERVAL)
 
 
+async def _cancel_bg_tasks() -> None:
+    """Отменить фоновые задачи прошлого запуска (если они ещё живы)."""
+    tasks = list(_bg_tasks)
+    _bg_tasks.clear()
+    for task in tasks:
+        task.cancel()
+    for task in tasks:
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception as error:
+            log.debug("фоновая задача завершилась с ошибкой при остановке: {}", error)
+
+
 async def on_startup(ctx: dict) -> None:
-    ctx["scheduler_task"] = asyncio.create_task(scheduler_loop())
-    ctx["reminder_task"] = asyncio.create_task(reminder_loop())
+    # защита от двойного планировщика: см. комментарий к _bg_tasks
+    await _cancel_bg_tasks()
+    _bg_tasks.extend(
+        [
+            asyncio.create_task(scheduler_loop()),
+            asyncio.create_task(reminder_loop()),
+        ]
+    )
     # лимит применяется ДО начала обработки задач — без окна «лишней» параллельности
     await _apply_max_jobs()
-    ctx["max_jobs_task"] = asyncio.create_task(max_jobs_sync_loop())
+    _bg_tasks.append(asyncio.create_task(max_jobs_sync_loop()))
 
 
 async def on_shutdown(ctx: dict) -> None:
-    for name in ("scheduler_task", "reminder_task", "max_jobs_task"):
-        task = ctx.get(name)
-        if task is not None:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+    await _cancel_bg_tasks()
 
 
 class WorkerSettings:
