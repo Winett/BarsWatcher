@@ -329,14 +329,16 @@ class BarsAuth:
         destination = (
             data.get("message") or data.get("Message") or data.get("result") or ""
         )
-        log.info("БАРС: код 2FA отправлен ({}) | ответ: {}", destination, data)
+        success = bool(data.get("success") or data.get("Success"))
+        if success:
+            log.info("БАРС: код 2FA отправлен ({}) | ответ: {}", destination, data)
+        else:
+            # отказ сервера (например, rate-limit) — это НЕ «отправлено»
+            log.warning("БАРС: код 2FA НЕ отправлен | ответ: {}", data)
         # сервер отдаёт HTML (например <br/>) — убираем теги, иначе Telegram
         # не разберёт разметку сообщения
         destination = _strip_html_tags(destination)
-        return TwoFASendResult(
-            success=bool(data.get("success") or data.get("Success")),
-            destination=destination,
-        )
+        return TwoFASendResult(success=success, destination=destination)
 
     async def verify_2fa_code(self, code: str) -> bool:
         """Проверить код. True — кука auth_bars появилась; False — код неверный."""

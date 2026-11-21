@@ -382,7 +382,14 @@ async def _after_auth(
             logger.error("не удалось отправить код 2FA: {}", error)
         await _save_session(service, db_id, client)
         where = destination or result.error or "указанное в БАРС"
-        await state.update_data(code_destination=where)
+        await state.update_data(
+            code_destination=where,
+            # момент успешной отправки: чтобы при вводе кода НЕ отправлять его
+            # повторно (каждая отправка генерирует НОВЫЙ код и ломает старый)
+            code_sent_at=(
+                datetime.now(UTC).isoformat() if destination else None
+            ),
+        )
         await _safe_edit(
             message,
             f"🔐 Требуется ввести 2FA код.\n"
@@ -454,16 +461,35 @@ async def two_fa_action(callback: CallbackQuery, state: FSMContext) -> None:
         client = _client(service, db_id)
         # ожидающее 2FA-состояние могло быть создано worker'ом — восстанавливаем
         await _restore_session(service, db_id, client)
-        # код мог не отправиться (сессия слетела) — отправляем при вводе,
-        # иначе пользователь вводит код, которого нет
+        # отправляем код при вводе ТОЛЬКО если его ещё не отправляли успешно:
+        # каждая отправка генерирует НОВЫЙ код (старый из SMS перестаёт
+        # действовать), поэтому повтор «на всякий случай» здесь вреден
+        data = await state.get_data()
         destination = None
-        try:
-            send_result = await client.send_2fa_code()
-            destination = send_result.destination
-        except AuthError:
-            pass  # состояние истекло — поможет «Отправить код снова»
-        except Exception as error:
-            logger.error("не удалось отправить код 2FA при вводе: {}", error)
+        sent_at = data.get("code_sent_at")
+        already_sent = False
+        if sent_at:
+            try:
+                already_sent = (
+                    datetime.now(UTC) - datetime.fromisoformat(sent_at)
+                    < timedelta(minutes=2)
+                )
+            except ValueError:
+                already_sent = False
+        if already_sent:
+            destination = data.get("code_destination") or None
+        else:
+            try:
+                send_result = await client.send_2fa_code()
+                destination = send_result.destination
+                if destination:
+                    await state.update_data(
+                        code_sent_at=datetime.now(UTC).isoformat()
+                    )
+            except AuthError:
+                pass  # состояние истекло — поможет «Отправить код снова»
+            except Exception as error:
+                logger.error("не удалось отправить код 2FA при вводе: {}", error)
         await _save_session(service, db_id, client)
 
         await state.set_state(TwoFAFlow.waiting_code)
