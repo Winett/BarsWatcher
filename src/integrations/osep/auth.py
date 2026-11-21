@@ -218,4 +218,4 @@ class OwaAuth:
             self._client.cookies.set(name, value)
         if self._account is None:
             self._account = "сессия восстановлена"
-        logger.info("ОСЭП: сессия восстановлена из сохранённого состояния")
+        logger.debug("ОСЭП: сессия восстановлена из сохранённого состояния")
