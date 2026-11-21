@@ -24,6 +24,9 @@ log = logger.bind(component="scheduler")
 
 __all__ = ["scheduler_tick", "scheduler_loop"]
 
+# лимит проверок одного сервиса за тик — settings.max_per_tick_per_service
+# (переменная окружения MAX_PER_TICK_PER_SERVICE, по умолчанию 5)
+
 
 async def scheduler_tick() -> int:
     """Одна выборка «кого проверять». Возвращает число поставленных проверок.
@@ -48,6 +51,7 @@ async def scheduler_tick() -> int:
             else None
         )
 
+        candidates: list[tuple[object, int, ServiceKind]] = []
         for state in bars_states:
             poll = await resolve_poll_settings(session, state.user_id)
             interval = (
@@ -55,8 +59,7 @@ async def scheduler_tick() -> int:
                 or state.current_interval_seconds
                 or poll.poll_interval_seconds
             )
-            state.next_check = now + timedelta(seconds=interval)
-            jobs.append((state.user_id, ServiceKind.BARS))
+            candidates.append((state, interval, ServiceKind.BARS))
 
         for state in osep_states:
             poll = await resolve_poll_settings(session, state.user_id)
@@ -65,8 +68,20 @@ async def scheduler_tick() -> int:
                 or state.current_interval_seconds
                 or poll.poll_interval_seconds
             )
+            candidates.append((state, interval, ServiceKind.OSEP))
+
+        # равномерно: по max_per_tick_per_service на сервис за тик, самые
+        # «давние» — первыми; невыбранные остаются должными до следующего тика
+        cap = settings.max_per_tick_per_service
+        picked: list[tuple[object, int, ServiceKind]] = []
+        for kind in (ServiceKind.BARS, ServiceKind.OSEP):
+            group = [c for c in candidates if c[2] == kind]
+            group.sort(key=lambda c: (c[0].next_check or now))
+            picked.extend(group[:cap])
+
+        for state, interval, _kind in picked:
             state.next_check = now + timedelta(seconds=interval)
-            jobs.append((state.user_id, ServiceKind.OSEP))
+            jobs.append((state.user_id, _kind))
 
         await uow.commit()
 
