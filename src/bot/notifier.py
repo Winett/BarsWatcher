@@ -515,10 +515,31 @@ _HANDLERS: list[tuple[type[Event], object]] = [
 ]
 
 
+def _best_effort(handler):
+    """Обработчик уведомлений НЕ должен ронять задачу: иначе arq повторяет её
+    целиком — и уже отправленные сообщения уходят пользователю ПОВТОРНО.
+
+    Внутри уже есть повторы на сетевые ошибки (send_with_retry) и уведомления
+    о проблемах доставки — дальше молча логируем и не повторяем.
+    """
+
+    async def wrapper(event) -> None:
+        try:
+            await handler(event)
+        except Exception:
+            logger.opt(exception=True).exception(
+                "уведомление {} не доставлено (повтора не будет) | user={}",
+                type(event).__name__,
+                getattr(event, "user_id", "?"),
+            )
+
+    return wrapper
+
+
 def register_telegram_notifier(bot: Bot) -> None:
     """Подписывает отправку в Telegram на уведомительные события."""
     global _bot
     _bot = bot
     for event_cls, handler in _HANDLERS:
-        subscribe(event_cls)(handler)  # type: ignore[arg-type]
+        subscribe(event_cls)(_best_effort(handler))  # type: ignore[arg-type]
     logger.info("telegram-notifier | подписан на {} событий", len(_HANDLERS))

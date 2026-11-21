@@ -86,8 +86,8 @@ async def reminder_tick() -> int:
     for user_id, reminder_time in targets:
         if test_interval > 0:
             # тестовый режим: каждые N секунд, без привязки к 18:00
-            key = f"reminder:test:{user_id}"
-            if not await redis.set(key, "1", nx=True, ex=max(test_interval - 5, 5)):
+            marker = f"reminder:test:{user_id}"
+            if await redis.exists(marker):
                 continue
         else:
             # обычный режим: своё время (по умолчанию 18:00 GMT+3), раз в день
@@ -100,20 +100,31 @@ async def reminder_tick() -> int:
                     now.strftime("%H:%M"),
                 )
                 continue
-            key = f"reminder:{today}:{user_id}"
-            if not await redis.set(key, "1", nx=True, ex=25 * 3600):
+            marker = f"reminder:{today}:{user_id}"
+            if await redis.exists(marker):
                 log.debug(
                     "напоминание: user={} пропущено (сегодня уже отправлено)",
                     user_id,
                 )
                 continue
         issues = await _collect_issues(user_id)
-        if issues is not None and not issues:
-            # все пары в порядке (или сегодня их нет) — напоминать не о чем
-            log.info("напоминание: user={} — все пары в порядке, пропуск", user_id)
+        # напоминаем, когда есть ЧТО напоминать: непоставленные пары,
+        # «требуется корректировка», «на рассмотрении» и т.п. Пустой список
+        # или несобранные данные (None) — молчим: «пустое» сообщение
+        # «проверьте пары» не отправляется никогда.
+        if not issues:
+            log.debug(
+                "напоминание: user={} — проблем с парами нет, пропуск", user_id
+            )
             continue
-        await publish(ReminderDue(user_id=user_id, issues=issues or []))
-        log.info("напоминание отправлено | user={}", user_id)
+        await publish(ReminderDue(user_id=user_id, issues=issues))
+        # маркер ставим ПОСЛЕ публикации: сбой до этого не «съест» напоминание
+        # (детерминированный event_id не даст дублей при повторе)
+        ttl = max(test_interval - 5, 5) if test_interval > 0 else 25 * 3600
+        await redis.set(marker, "1", ex=ttl)
+        log.info(
+            "напоминание отправлено | user={} | проблем: {}", user_id, len(issues)
+        )
         sent += 1
     return sent
 
